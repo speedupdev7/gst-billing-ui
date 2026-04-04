@@ -39,11 +39,10 @@ const RoleMasterList = () => {
 
   // FETCH DATA
   const fetchRoles = () => {
-    axios.get("http://localhost:8081/api/v1/roles")
+    axios.get("/api/v1/roles")
       .then((res) => {
-        const actualData = Array.isArray(res.data)
-          ? res.data
-          : (res.data.content || res.data.roles || []);
+        // Extract content from paginated response, preserving backend order
+        const actualData = res.data.content || (Array.isArray(res.data) ? res.data : res.data.roles || []);
         setRoles(actualData);
       })
       .catch((err) => {
@@ -67,7 +66,7 @@ const RoleMasterList = () => {
     if (!roleToDelete) return;
     try {
       // Use template literals with backticks and a forward slash /
-  const response=await axios.delete(`http://localhost:8081/api/v1/roles/${roleToDelete}`);
+  const response=await axios.delete(`/api/v1/roles/${roleToDelete}`);
       
       setRoles(prev => prev.filter(item => item.roleId !== roleToDelete));
       console.log(response.data);
@@ -90,11 +89,11 @@ const RoleMasterList = () => {
     if (onView) onView("Role", roleData);
   };
 
-  // FILTER LOGIC
+  // FILTER LOGIC - Preserves original backend order
   const filtered = useMemo(() => {
     if (!Array.isArray(role)) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return role;
+    if (!q) return role; // Return in original backend order
     return role.filter(c =>
       (c.roleName || "").toLowerCase().includes(q) ||
       (c.roleCode || "").toLowerCase().includes(q) ||

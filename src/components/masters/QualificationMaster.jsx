@@ -26,7 +26,7 @@ export default function QualificationMaster() {
   // --- 1. FETCH POST API CALLING (To prevent blank form on edit) ---
   useEffect(() => {
     if (editId) {
-      axios.get(`http://localhost:8081/api/v1/qualifications/${editId}`)
+      axios.get(`/api/v1/qualifications/${editId}`)
         .then((res) => {
           setForm(res.data);
         })
@@ -42,7 +42,7 @@ export default function QualificationMaster() {
   // --- 2.  PUT API CALLING ---
   const updateQualification = async () => {
     try {
-      const response = await axios.put(`http://localhost:8081/api/v1/qualifications/${editId}`, form);
+      const response = await axios.put(`/api/v1/qualifications/${editId}`, form);
       toast.success("Updated successfully!");
       navigate("/qualification-master-list");
     } catch (error) {
@@ -56,7 +56,7 @@ export default function QualificationMaster() {
   // --- 3. POST API CALLING ---
   const saveQualification = async () => {
     try {
-      const response = await axios.post("http://localhost:8081/api/v1/qualifications", form);
+      const response = await axios.post("/api/v1/qualifications", form);
       toast.success("Saved successfully!");
       navigate("/qualification-master-list");
     } catch (error) {

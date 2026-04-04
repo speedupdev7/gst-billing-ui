@@ -21,14 +21,19 @@ export default function RoleMaster() {
     roleName: "",
     description: "",
     isSystemRole: false,
+    isActive: true,
   });
 
   // --- 1. FETCH POST API CALLING (To prevent blank form on edit) ---
   useEffect(() => {
     if (editId) {
-      axios.get(`http://localhost:8081/api/v1/roles/${editId}`)
+      axios.get(`/api/v1/roles/${editId}`)
         .then((res) => {
-          setForm(res.data);
+          const data = res.data;
+          setForm({
+            ...data,
+            isSystemRole: data.roleType === 'SYSTEM',
+          });
         })
         .catch((err) => {
           console.error("Fetch Error:", err);
@@ -42,7 +47,11 @@ export default function RoleMaster() {
   // --- 2.  PUT API CALLING ---
   const updateRole = async () => {
     try {
-      const response = await axios.put(`http://localhost:8081/api/v1/roles/${editId}`, form);
+      const payload = {
+        ...form,
+        roleType: form.isSystemRole ? 'SYSTEM' : 'NORMAL',
+      };
+      const response = await axios.put(`/api/v1/roles/${editId}`, payload);
       toast.success("Updated successfully!");
       navigate("/role-master-list");
       console.log(response.data);
@@ -58,7 +67,11 @@ export default function RoleMaster() {
   // --- 3. POST API CALLING ---
   const saveRole = async () => {
     try {
-      const response = await axios.post("http://localhost:8081/api/v1/roles", form);
+      const payload = {
+        ...form,
+        roleType: form.isSystemRole ? 'SYSTEM' : 'NORMAL',
+      };
+      const response = await axios.post("/api/v1/roles", payload);
       toast.success("Saved successfully!");
       navigate("/role-master-list");
       console.log(response.data);
@@ -67,7 +80,7 @@ export default function RoleMaster() {
       console.error("Backend Error Detail:", error.response?.data);
       console.error("Save Error:", error);
       if (error.response && error.response.status === 409) {
-        toast.error("Supplier record already exists!");
+        toast.error("Role record already exists!");
       }else if(error.response && error.response.status===500){
           toast.error("Server Error: Please check if the Role Code is unique.");
       } else {
@@ -112,6 +125,7 @@ export default function RoleMaster() {
       roleName: "",
       description: "",
       isSystemRole: false,
+      isActive: true,
     });
 
   const inputClass =
@@ -122,7 +136,7 @@ export default function RoleMaster() {
       <ReusableDialogueBox
         isOpen={isDialogOpen}
         title={editId ? "Confirm Update" : "Confirm Save"}
-        message={editId ? "Are you sure you want to update this supplier?" : "Are you sure you want to save this supplier?"}
+        message={editId ? "Are you sure you want to update this role?" : "Are you sure you want to save this role?"}
         onConfirm={handleSubmit}
         onCancel={() => setIsDialogOpen(false)}
       />
@@ -132,7 +146,7 @@ export default function RoleMaster() {
           <FiBriefcase />
           Role Master
         </h1>
-        <p className="text-xs text-slate-500">{editId ? "Update existing supplier" : "Add new supplier details"}</p>
+        <p className="text-xs text-slate-500">{editId ? "Update existing role" : "Add new role details"}</p>
 
         <Link
           to="/role-master-list"
@@ -212,6 +226,24 @@ export default function RoleMaster() {
                 Is System Role (core role that cannot be deleted)
               </label>
             </div>
+
+            {/* Is Active (checkbox) */}
+            <div className="flex items-center gap-3 mt-2 md:col-span-2">
+              <input
+                id="isActive"
+                name="isActive"
+                type="checkbox"
+                checked={form.isActive}
+                onChange={handleChange}
+                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+              />
+              <label
+                htmlFor="isActive"
+                className="text-sm font-medium text-slate-600"
+              >
+                Is Active
+              </label>
+            </div>
           </div>
         </section>
 
@@ -223,7 +255,7 @@ export default function RoleMaster() {
             className={`flex items-center justify-center gap-2 px-6 py-2 rounded-md text-white text-sm font-semibold shadow transition-all ${editId ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
           >
             {loading ? <FiLoader className="animate-spin" /> : <FiSave />}
-            {editId ? "UPDATE SUPPLIER" : "SAVE SUPPLIER"}
+            {editId ? "UPDATE ROLE" : "SAVE ROLE"}
           </button>
 
           <button

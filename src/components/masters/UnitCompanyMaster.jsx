@@ -42,7 +42,7 @@ export default function UnitCompanyMaster() {
   // --- SEPARATE API: PUT (Update) ---
   const updateUnit = async () => {
     try {
-      await axios.put(`http://localhost:8081/api/unit-master/${editId}`, form);
+      await axios.put(`/api/unit-master/${editId}`, form);
       toast.success("Updated successfully!");
       navigate("/unit-company-list");
     } catch (error) {
@@ -54,7 +54,7 @@ export default function UnitCompanyMaster() {
   // --- SEPARATE API: POST (Save) ---
   const saveUnit = async () => {
     try {
-      await axios.post("http://localhost:8081/api/unit-master", form);
+      await axios.post("/api/unit-master", form);
       toast.success("Saved successfully!");
       navigate("/unit-company-list");
     } catch (error) {
@@ -80,7 +80,7 @@ export default function UnitCompanyMaster() {
 
   useEffect(() => {
     if (editId) {
-      axios.get(`http://localhost:8081/api/unit-master/${editId}`)
+      axios.get(`/api/unit-master/${editId}`)
         .then((res) => {
           setForm(res.data);
         })

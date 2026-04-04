@@ -40,7 +40,7 @@ export default function SupplierMaster() {
   // --- 1. FETCH POST API CALLING (To prevent blank form on edit) ---
   useEffect(() => {
     if (editId) {
-      axios.get(`http://localhost:8081/api/supplier-master/${editId}`)
+      axios.get(`/api/supplier-master/${editId}`)
         .then((res) => {
           setForm(res.data);
         })
@@ -59,7 +59,7 @@ export default function SupplierMaster() {
   // --- 2.  PUT API CALLING ---
   const updateSupplier = async () => {
     try {
-      const response = await axios.put(`http://localhost:8081/api/supplier-master/${editId}`, form);
+      const response = await axios.put(`/api/supplier-master/${editId}`, form);
       toast.success("Updated successfully!");
       navigate("/supplier-master-list");
     } catch (error) {
@@ -73,7 +73,7 @@ export default function SupplierMaster() {
   // --- 3. POST API CALLING ---
   const saveSupplier = async () => {
     try {
-      const response = await axios.post("http://localhost:8081/api/supplier-master", form);
+      const response = await axios.post("/api/supplier-master", form);
       toast.success("Saved successfully!");
       navigate("/supplier-master-list");
     } catch (error) {

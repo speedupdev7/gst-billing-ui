@@ -1,247 +1,324 @@
-import React, { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom"; // Added useNavigate for real usage
-import { 
-  Eye, Edit, Trash2, Search, FileSpreadsheet, FileText, Printer, Plus, X 
+import React, { useMemo, useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import {
+  Search,
+  Plus,
+  FileText,
+  Download,
+  Printer,
+  X,
 } from "lucide-react";
+import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ModeEditIcon from '@mui/icons-material/ModeEdit';
 
-// Import your context
+// Custom Context Hooks
+import { useToast } from "../contextapi/ToastContext";
 import { useExport } from "../contextapi/ExportContext";
+import { useActions } from "../contextapi/ActionsContext";
+import ReusableDialogueBox from "../contextapi/ReusableDialogueBox";
 
-/* ---------------- Enhanced Toasts Component ---------------- */
-function Toasts({ toasts, remove }) {
-  return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className={`max-w-sm w-full px-4 py-3 rounded-xl shadow-xl border flex items-start gap-3 transition-opacity duration-300 pointer-events-auto ${
-            t.type === "success"
-              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-              : t.type === "error"
-              ? "bg-rose-50 border-rose-300 text-rose-800"
-              : "bg-sky-50 border-sky-300 text-sky-800"
-          }`}
-        >
-          <div className="flex-1 text-sm font-medium">{t.message}</div>
-          <button 
-            onClick={() => remove(t.id)} 
-            className="text-sm opacity-80 hover:opacity-100 transition-opacity p-1 -m-1"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function EmployeeList() {
+const ItemMasterList = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const { exportExcel, exportPDF, printTable } = useExport();
+  const { onView } = useActions();
 
+  // States
   const [query, setQuery] = useState("");
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [toasts, setToasts] = useState([]);
-  const [onlySelectedExport, setOnlySelectedExport] = useState(false);
   const [perPage] = useState(10);
   const [page, setPage] = useState(1);
+  const [items, setItems] = useState([]);
 
-  const pushToast = (type, message, ttl = 3500) => {
-    const id = Date.now() + Math.random().toString(36).slice(2, 7);
-    setToasts((s) => [...s, { id, type, message }]);
-    if (ttl > 0) setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), ttl);
+  // --- DIALOGUE & VIEW STATES ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // FETCH DATA
+  const fetchItems = () => {
+    axios.get("/api/item-master")
+      .then((res) => {
+        // Response is an array, not paginated
+        setItems(res.data);
+      })
+      .catch((err) => {
+        console.error("GET ERROR:", err);
+        toast.error("Failed to load Item data");
+        setItems([]);
+      });
   };
-  const removeToast = (id) => setToasts((s) => s.filter((t) => t.id !== id));
 
-  const onDeleteRow = (id) => {
-    pushToast('error', `Simulating DELETE for Employee ID ${id}.`, 5000);
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  // DELETE HANDLER
+  const openDeleteModal = (itemId) => {
+    setItemToDelete(itemId);
+    setIsDeleteDialogOpen(true);
   };
 
-  const employees = useMemo(() => [
-    { EmployeeID: 101, FirstName: "Rahul", LastName: "Verma", Gender: "Male", DateOfBirth: "1990-05-12", JoiningDate: "2021-02-01", DepartmentID: "D001", DesignationID: "DEV01", MobileNo: "+91-9876543210", EmailID: "rahul.verma@example.com", City: "Mumbai" },
-    { EmployeeID: 102, FirstName: "Sakshi", LastName: "Agarwal", Gender: "Female", DateOfBirth: "1992-09-23", JoiningDate: "2020-08-15", DepartmentID: "D002", DesignationID: "ACC01", MobileNo: "+91-9123456780", EmailID: "sakshi.agarwal@example.com", City: "Pune" },
-    { EmployeeID: 103, FirstName: "Aman", LastName: "Khan", Gender: "Male", DateOfBirth: "1988-12-02", JoiningDate: "2019-11-20", DepartmentID: "D003", DesignationID: "HR01", MobileNo: "+91-9988776655", EmailID: "aman.khan@example.com", City: "Delhi" },
-  ], []);
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      const response = await axios.delete(`/api/item-master/${itemToDelete}`);
+      setItems(prev => prev.filter(item => item.itemId !== itemToDelete));
+      console.log(response.data);
+      toast.success("Item deleted successfully!");
+    } catch (err) {
+      console.error("Delete Error:", err);
+      const msg = err.response?.data?.message || "Delete failed. Item might be in use or protected.";
+      toast.error(msg);
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handleView = (itemData) => {
+    setSelectedItem(itemData);
+    setIsViewModalOpen(true);
+    if (onView) onView("Item", itemData);
+  };
 
   /* ---------------- FILTER + PAGINATION ---------------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter((emp) =>
-      Object.values(emp).some(val => String(val).toLowerCase().includes(q))
+    if (!q) return items;
+    return items.filter((item) =>
+      (item.itemName || "").toLowerCase().includes(q) ||
+      (item.itemCode || "").toLowerCase().includes(q) ||
+      (item.hsnCode || "").toLowerCase().includes(q) ||
+      (item.unit || "").toLowerCase().includes(q)
     );
-  }, [employees, query]);
+  }, [items, query]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
 
-  /* ---------------- SELECT ROWS ---------------- */
-  const toggleRow = (id) => {
-    setSelectedRows((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
-  const toggleAll = () => {
-    const visibleIds = pageItems.map((c) => c.EmployeeID);
-    const allSelected = visibleIds.every((id) => selectedRows.includes(id));
-    if (allSelected) setSelectedRows((s) => s.filter((id) => !visibleIds.includes(id)));
-    else setSelectedRows((s) => Array.from(new Set([...s, ...visibleIds])));
-  };
-
   /* ---------------- EXPORT BRIDGE ---------------- */
   const exportColumns = [
-    { header: "ID", key: "EmployeeID" },
-    { header: "First Name", key: "FirstName" },
-    { header: "Last Name", key: "LastName" },
-    { header: "Gender", key: "Gender" },
-    { header: "Joining Date", key: "JoiningDate" },
-    { header: "Department", key: "DepartmentID" },
-    { header: "Designation", key: "DesignationID" },
-    { header: "Mobile", key: "MobileNo" },
-    { header: "Email", key: "EmailID" },
-    { header: "City", key: "City" },
+    { key: "itemCode", header: "Item Code" },
+    { key: "itemName", header: "Item Name" },
+    { key: "hsnCode", header: "HSN Code" },
+    { key: "unit", header: "Unit" },
+    { key: "gstRate", header: "GST Rate (%)" },
+    { key: "purchasePrice", header: "Purchase Price" },
+    { key: "salePrice", header: "Sale Price" },
+    { key: "mrp", header: "MRP" },
+    { key: "openingStock", header: "Opening Stock" },
   ];
 
   const handleExport = (type) => {
-    const sourceData = onlySelectedExport
-      ? employees.filter((e) => selectedRows.includes(e.EmployeeID))
-      : filtered;
+    const sourceData = filtered;
 
     if (sourceData.length === 0) {
-      pushToast("error", onlySelectedExport ? "No employees selected." : "No data to export.");
+      toast.error("No data to export.");
       return;
     }
 
     const config = {
-      fileName: `Employee_List`,
-      title: "Employee Master Report",
+      fileName: `Item_List`,
+      title: "Item Master Report",
       columns: exportColumns,
       rows: sourceData
     };
 
     if (type === "excel") {
       exportExcel(config);
-      pushToast("success", "Exported to Excel");
+      toast.success("Exported to Excel");
     }
     if (type === "pdf") {
       exportPDF(config);
-      pushToast("success", "Exported to PDF");
+      toast.success("Exported to PDF");
     }
     if (type === "print") {
       printTable(config);
-      pushToast("info", "Print dialog opened");
+      toast.success("Print dialog opened");
     }
   };
 
   return (
-    <div className="bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-slate-100 min-h-full">
-      <Toasts toasts={toasts} remove={removeToast} />
+    <div className="font-poppins bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-slate-100 min-h-full">
 
-      {/* Header & Search */}
+      <ReusableDialogueBox
+        isOpen={isDeleteDialogOpen}
+        title="Delete Item"
+        message="Are you sure you want to delete this item? This action cannot be undone."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setIsDeleteDialogOpen(false)}
+      />
+
+      {/* --- SIDE VIEW PANEL --- */}
+      <div className={`fixed inset-0 z-[999] overflow-hidden transition-opacity duration-500 ${isViewModalOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsViewModalOpen(false)} />
+        <div className={`absolute inset-y-0 right-0 max-w-lg w-full bg-white shadow-2xl transform transition-transform duration-500 ease-in-out ${isViewModalOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <div className="h-full flex flex-col">
+            <div className="p-6 border-b bg-indigo-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-indigo-900">Item Profile</h2>
+                <p className="text-xs text-indigo-600 mt-1">Detailed information</p>
+              </div>
+              <button onClick={() => setIsViewModalOpen(false)} className="p-2 hover:bg-white rounded-full transition">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8">
+              <div className="space-y-8">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Item Code</p>
+                  <p className="text-sm font-mono text-slate-700">{selectedItem?.itemCode || "N/A"}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl uppercase">
+                    {selectedItem?.itemName?.charAt(0) || "I"}
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 uppercase">{selectedItem?.itemName}</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">HSN Code</p>
+                    <p className="text-sm text-slate-700">{selectedItem?.hsnCode || "N/A"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Unit</p>
+                    <p className="text-sm font-bold text-emerald-600">{selectedItem?.unit || "N/A"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">GST Rate</p>
+                    <p className="text-sm text-slate-700">{selectedItem?.gstRate}%</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Purchase Price</p>
+                    <p className="text-sm text-slate-700">₹{selectedItem?.purchasePrice || "N/A"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex gap-3">
+              <button
+                onClick={() => navigate(`/item-master?id=${selectedItem?.itemId}`)}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-md"
+              >
+                Edit Item
+              </button>
+              <button
+                onClick={() => setIsViewModalOpen(false)}
+                className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b">
-        <h1 className="text-3xl font-bold text-indigo-700">Item Master List</h1>
+        <h1 className="text-xl font-semibold text-indigo-700">Item Master List</h1>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border w-full sm:w-80 shadow-inner">
             <Search className="text-slate-400 w-5 h-5" />
             <input
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              placeholder="Search by ID, name, dept, mobile or city"
-              className="bg-transparent outline-none text-sm w-full placeholder:text-slate-400"
+              placeholder="Search Items..."
+              className="bg-transparent outline-none text-sm w-full"
             />
           </div>
-          <Link to="/item-master" className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow-md hover:bg-indigo-700 transition transform hover:scale-[1.02]">
+          <Link to="/item-master" className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
             <Plus className="w-4 h-4" /> Add Item
           </Link>
         </div>
       </div>
 
-      {/* Export Controls */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5 p-3 rounded-lg bg-slate-50 border border-slate-200">
-        <div className="flex items-center gap-4 text-sm text-slate-600">
-          <span className="font-semibold">{selectedRows.length} employee{selectedRows.length !== 1 ? 's' : ''} selected</span>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={onlySelectedExport}
-              onChange={(e) => setOnlySelectedExport(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-            />
-            <span className="text-xs sm:text-sm">Export/Print selected only</span>
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button onClick={() => handleExport("excel")} className="px-3 py-2 flex items-center gap-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition transform hover:scale-[1.02]">
-            <FileSpreadsheet className="w-4 h-4" />
-            <span className="hidden sm:inline">Excel</span>
-          </button>
-          <button onClick={() => handleExport("pdf")} className="px-3 py-2 flex items-center gap-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition transform hover:scale-[1.02]">
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">PDF</span>
-          </button>
-          <button onClick={() => handleExport("print")} className="px-3 py-2 flex items-center gap-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition transform hover:scale-[1.02]">
-            <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Print</span>
-          </button>
-        </div>
+      {/* EXPORT OPTIONS */}
+      <div className="flex flex-wrap items-center justify-end gap-3 mb-6 p-2 bg-slate-50 rounded-xl border border-slate-200">
+        <button onClick={() => exportExcel({ fileName: "Items", sheetName: "Items", columns: exportColumns, rows: filtered })} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition">
+          <Download className="w-4 h-4" /> Excel
+        </button>
+        <button onClick={() => exportPDF({ fileName: "Items", title: "Item List", columns: exportColumns, rows: filtered })} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 transition">
+          <FileText className="w-4 h-4" /> PDF
+        </button>
+        <button onClick={() => printTable({ title: "Item List", columns: exportColumns, rows: filtered })} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm hover:bg-slate-100 transition">
+          <Printer className="w-4 h-4" /> Print
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto border rounded-xl shadow-lg">
-        <table className="min-w-full text-sm table-auto hidden md:table">
-          <thead className="bg-blue-900 sticky top-0 border-b border-indigo-200">
-            <tr className="text-white text-left">
-              <th className="px-4 py-3 w-10">
-                <input type="checkbox" checked={pageItems.length > 0 && pageItems.every((c) => selectedRows.includes(c.EmployeeID))} onChange={toggleAll} className="w-4 h-4 rounded border-indigo-300 focus:ring-indigo-500" />
-              </th>
-              <th className="px-4 py-3">Employee ID</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Department</th>
-              <th className="px-4 py-3">Designation</th>
-              <th className="px-4 py-3">Mobile</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3 text-center w-28">Actions</th>
+      {/* DATA TABLE */}
+      <div className="overflow-hidden border rounded-xl shadow-lg">
+        <table className="min-w-full text-sm table-auto">
+          <thead className="bg-indigo-900 text-white">
+            <tr>
+              <th className="px-4 py-3 text-center w-16">Sr No.</th>
+              <th className="px-4 py-3 text-center w-32">Actions</th>
+              <th className="px-4 py-3 text-left">Item Code</th>
+              <th className="px-4 py-3 text-left">Item Name</th>
+              <th className="px-4 py-3 text-left">HSN Code</th>
+              <th className="px-4 py-3 text-center">Unit</th>
+              <th className="px-4 py-3 text-center">GST Rate</th>
+              <th className="px-4 py-3 text-right">Purchase Price</th>
             </tr>
           </thead>
-          <tbody>
-            {pageItems.map((e) => (
-              <tr key={e.EmployeeID} className={`border-b border-slate-100 transition ${selectedRows.includes(e.EmployeeID) ? "bg-indigo-100/50" : "hover:bg-slate-50"}`}>
-                <td className="px-4 py-3">
-                  <input type="checkbox" checked={selectedRows.includes(e.EmployeeID)} onChange={() => toggleRow(e.EmployeeID)} className="w-4 h-4 text-indigo-600 rounded" />
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-600">{e.EmployeeID}</td>
-                <td className="px-4 py-3 font-medium text-slate-700">{e.FirstName} {e.LastName}</td>
-                <td className="px-4 py-3 text-slate-600">{e.DepartmentID}</td>
-                <td className="px-4 py-3 text-slate-600">{e.DesignationID}</td>
-                <td className="px-4 py-3 text-slate-600">{e.MobileNo}</td>
-                <td className="px-4 py-3 text-slate-600">{e.EmailID}</td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <button className="p-2 rounded-full hover:bg-slate-200 text-slate-600"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => navigate(`/employee-master?id=${e.EmployeeID}`)} className="p-2 rounded-full hover:bg-slate-200 text-sky-600"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => onDeleteRow(e.EmployeeID)} className="p-2 rounded-full hover:bg-slate-200 text-rose-600"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
+          <tbody className="divide-y divide-slate-100">
+            {pageItems.length > 0 ? (
+              pageItems.map((item, index) => (
+                <tr key={item.itemId} className="hover:bg-slate-50 transition">
+                  <td className="px-4 py-3 text-center font-medium text-slate-500">
+                    {(page - 1) * perPage + index + 1}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button onClick={() => handleView(item)} className="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition">
+                        <VisibilityIcon sx={{ fontSize: 18 }} />
+                      </button>
+                      <button onClick={() => navigate(`/item-master?id=${item.itemId}`)} className="p-2 rounded-full hover:bg-sky-100 text-sky-600 transition">
+                        <ModeEditIcon sx={{ fontSize: 18 }} />
+                      </button>
+                      <button onClick={() => openDeleteModal(item.itemId)} className="p-2 rounded-full hover:bg-rose-100 text-rose-600 transition">
+                        <DeleteIcon sx={{ fontSize: 18 }} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-slate-700">{item.itemCode}</td>
+                  <td className="px-4 py-3 font-medium text-slate-700 uppercase">{item.itemName}</td>
+                  <td className="px-4 py-3 text-slate-500">{item.hsnCode}</td>
+                  <td className="px-4 py-3 text-center font-medium text-slate-700">{item.unit}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-2 py-1 rounded text-xs font-bold bg-blue-100 text-blue-700">
+                      {item.gstRate}%
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-700">₹{item.purchasePrice}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="8" className="px-4 py-10 text-center text-slate-400 italic">No Items found.</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
-
-        {/* Mobile card view omitted for brevity but logic remains same as desktop row */}
       </div>
 
-      {/* Pagination */}
+      {/* PAGINATION */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 p-4 border-t">
         <div className="text-sm text-slate-600">
-          Showing {Math.min((page - 1) * perPage + 1, filtered.length)} - {Math.min(page * perPage, filtered.length)} of {filtered.length} total
+          Showing <b>{filtered.length > 0 ? (page - 1) * perPage + 1 : 0}</b> to <b>{Math.min(page * perPage, filtered.length)}</b> of <b>{filtered.length}</b>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-4 py-2 rounded-lg border bg-white hover:bg-slate-100 disabled:opacity-50" disabled={page === 1}>Prev</button>
-          <div className="px-4 py-2 border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-lg font-semibold">{page} / {totalPages}</div>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="px-4 py-2 rounded-lg border bg-white hover:bg-slate-100 disabled:opacity-50" disabled={page === totalPages}>Next</button>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50 transition">Prev</button>
+          <div className="px-4 py-2 border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-lg font-bold">{page} / {totalPages}</div>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50 transition">Next</button>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default ItemMasterList;

@@ -40,9 +40,11 @@ const SupplierMasterList =()=>{
 
   // Load List Data
   const fetchSuppliers = () => {
-    axios.get("http://localhost:8081/api/supplier-master")
+    axios.get("/api/supplier-master")
       .then((res) => {
-        setSuppliers(res.data);
+        // Extract content from paginated response, preserving backend order
+        const actualData = res.data.content || (Array.isArray(res.data) ? res.data : res.data.suppliers || []);
+        setSuppliers(actualData);
       })
       .catch((err) => {
         console.error("GET ERROR:", err);
@@ -63,7 +65,7 @@ const SupplierMasterList =()=>{
   const handleConfirmDelete = async () => {
     if (!supplierToDelete) return;
     try {
-      await axios.delete(`http://localhost:8081/api/supplier-master/${supplierToDelete}`);
+      await axios.delete(`/api/supplier-master/${supplierToDelete}`);
       // FIXED: Use 'setSuppliers' and check against 'supplier'
       setSuppliers(prev => prev.filter(item => item.supplierId !== supplierToDelete));
       toast.success("Record deleted successfully!");
@@ -81,10 +83,10 @@ const SupplierMasterList =()=>{
     if (onView) onView("Supplier", supplierData);
   };
 
-  // Filter Logic
+  // Filter Logic - Preserves original backend order
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return supplier;
+    if (!q) return supplier; // Return in original backend order
     return supplier.filter(c =>
       (c.supplierName || "").toLowerCase().includes(q) ||
       (c.gstin || "").toLowerCase().includes(q) ||

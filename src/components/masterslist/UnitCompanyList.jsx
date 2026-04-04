@@ -39,9 +39,11 @@ export default function UnitCompanyList() {
 
   // Load List Data
   const fetchCompanies = () => {
-    axios.get("http://localhost:8081/api/unit-master")
+    axios.get("/api/unit-master")
       .then((res) => {
-        setCompanies(res.data);
+        // Extract content from paginated response, preserving backend order
+        const actualData = res.data.content || (Array.isArray(res.data) ? res.data : res.data.companies || []);
+        setCompanies(actualData);
       })
       .catch((err) => {
         console.error("GET ERROR:", err);
@@ -62,7 +64,7 @@ export default function UnitCompanyList() {
   const handleConfirmDelete = async () => {
     if (!unitToDelete) return;
     try {
-      await axios.delete(`http://localhost:8081/api/unit-master/${unitToDelete}`);
+      await axios.delete(`/api/unit-master/${unitToDelete}`);
       setCompanies(prev => prev.filter(item => item.unitId !== unitToDelete));
       toast.success("Record deleted successfully!");
     } catch (err) {
@@ -79,10 +81,10 @@ export default function UnitCompanyList() {
     onView("Company", company);
   };
 
-  // Filter Logic
+  // Filter Logic - Preserves original backend order
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return companies;
+    if (!q) return companies; // Return in original backend order
     return companies.filter(c =>
       (c.unitName || "").toLowerCase().includes(q) ||
       (c.gstin || "").toLowerCase().includes(q) ||

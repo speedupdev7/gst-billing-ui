@@ -39,11 +39,10 @@ const QualificationMasterList = () => {
 
   // FETCH DATA
   const fetchQualification = () => {
-    axios.get("http://localhost:8081/api/v1/qualifications")
+    axios.get("/api/v1/qualifications")
       .then((res) => {
-        const actualData = Array.isArray(res.data)
-          ? res.data
-          : (res.data.content || res.data.qualification || []);
+        // Extract content from paginated response, preserving backend order
+        const actualData = res.data.content || (Array.isArray(res.data) ? res.data : res.data.qualification || []);
         setQualification(actualData);
       })
       .catch((err) => {
@@ -67,7 +66,7 @@ const QualificationMasterList = () => {
     if (!qualificationToDelete) return;
     try {
       // Use template literals with backticks and a forward slash /
-  const response=await axios.delete(`http://localhost:8081/api/v1/qualifications/${qualificationToDelete}`);
+  const response=await axios.delete(`/api/v1/qualifications/${qualificationToDelete}`);
       
       setQualification(prev => prev.filter(item => item.qualificationId !== qualificationToDelete));
       console.log(response.data);
@@ -90,12 +89,12 @@ const QualificationMasterList = () => {
     if (onView) onView("Qualification", qualificationData);
   };
 
-  // FILTER LOGIC
+  // FILTER LOGIC - Preserves original backend order
   const filtered = useMemo(() => {
     if (!Array.isArray(qualification)) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return qualification;
-    return role.filter(c =>
+    if (!q) return qualification; // Return in original backend order
+    return qualification.filter(c =>
       (c.qualificationName || "").toLowerCase().includes(q) ||
       (c.qualificationCode || "").toLowerCase().includes(q) ||
       (c.description || "").toLowerCase().includes(q)
