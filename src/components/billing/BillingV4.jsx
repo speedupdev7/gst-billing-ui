@@ -2,13 +2,30 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Save, Printer, Mail, Send, Truck, XCircle, Plus, Trash2, MapPin, FileText, Hash, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import axios from 'axios';
 const BillingV4 = () => {
   const [paymentMode, setPaymentMode] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [invoiceTime, setInvoiceTime] = useState(new Date());
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemSuggestions, setItemSuggestions] = useState([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [placeOfSupply, setPlaceOfSupply] = useState('Maharashtra');
+  const [reverseCharge, setReverseCharge] = useState(false);
+  const [transporterName, setTransporterName] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [narration, setNarration] = useState('');
   const createEmptyRow = () => ({
     id: Date.now() + Math.random(),
+    itemId: null,
+    itemCode: '',
     itemName: '',
+    itemNameDetails: '',
     hsn: '',
     batch: '',
     rate: 0,
@@ -63,6 +80,122 @@ const BillingV4 = () => {
 
   // End Of Amount In Words Logic
   // -----------------------------------------------------
+
+  // API Functions
+  const searchCustomers = async (query) => {
+    if (query.length < 3) {
+      setCustomerSuggestions([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/customer-master/search?q=${encodeURIComponent(query)}`);
+      setCustomerSuggestions(response.data);
+      setShowCustomerDropdown(true);
+    } catch (error) {
+      console.error('Error searching customers:', error);
+      setCustomerSuggestions([]);
+    }
+  };
+
+  const searchItems = async (query) => {
+    if (query.length < 3) {
+      setItemSuggestions([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/item-master/search?q=${encodeURIComponent(query)}`);
+      setItemSuggestions(response.data);
+      setShowItemDropdown(true);
+    } catch (error) {
+      console.error('Error searching items:', error);
+      setItemSuggestions([]);
+    }
+  };
+
+  const selectCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setCustomerSearch(customer.customerName);
+    setShowCustomerDropdown(false);
+  };
+
+  const selectItem = (index, item) => {
+    const updatedItems = [...items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      itemId: item.itemId,
+      itemCode: item.itemCode,
+      itemName: item.itemName, // for display
+      itemNameDetails: item.itemNameDetails,
+      hsn: item.hsnCode,
+      gstP: item.gstRate,
+      rate: item.salePrice,
+      batch: updatedItems[index].batch || 'BATCH01' // keep existing batch if set
+    };
+    setItems(calculateTotals(updatedItems));
+    setItemSearch('');
+    setShowItemDropdown(false);
+  };
+
+  const saveInvoice = async () => {
+    if (!selectedCustomer) {
+      alert('Please select a customer');
+      return;
+    }
+
+    const invoiceData = {
+      invoiceNo: invoiceNo || `INV/${new Date().getFullYear()}/${Date.now()}`,
+      invoiceDate: invoiceDate.toISOString().split('T')[0],
+      unitId: 1, // Assuming default unit
+      customerId: selectedCustomer.customerId,
+      placeOfSupply: placeOfSupply,
+      stateCode: selectedCustomer.stateCode,
+      reverseCharge: reverseCharge,
+      totalGrossAmount: totals.totalGross,
+      totalDiscount: totals.totalDisc,
+      taxableAmount: totals.totalTaxable,
+      totalCgst: totals.totalGST / 2,
+      totalSgst: totals.totalGST / 2,
+      totalIgst: 0,
+      roundOff: parseFloat(totals.roundOff),
+      finalAmount: totals.invoiceTotal,
+      transporterName: transporterName,
+      vehicleNumber: vehicleNumber,
+      narration: narration,
+      items: items.map(item => ({
+        itemId: item.itemId,
+        batchCode: item.batch || 'BATCH01',
+        hsnCode: item.hsn,
+        quantity: item.qty,
+        rate: item.rate,
+        grossAmount: item.grossAmount,
+        discountPct: item.discP,
+        discountAmt: item.discA,
+        taxableAmount: item.taxableAmt,
+        gstRate: item.gstP,
+        cgstAmt: item.gstA / 2,
+        sgstAmt: item.gstA / 2,
+        igstAmt: 0,
+        lineTotal: item.lineTotal
+      })),
+      balance: {
+        invoiceAmount: totals.invoiceTotal,
+        paidAmount: 0,
+        balanceAmount: totals.invoiceTotal,
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days
+        status: 'UNPAID'
+      },
+      payments: []
+    };
+
+    try {
+      const response = await axios.post('/api/invoice', invoiceData);
+      alert('Invoice saved successfully!');
+      console.log('Saved invoice:', response.data);
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      alert('Error saving invoice. Please try again.');
+    }
+  };
   const [items, setItems] = useState([createEmptyRow()]);
   const [totals, setTotals] = useState({
     totalGross: 0,
@@ -138,7 +271,13 @@ const BillingV4 = () => {
 
           <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50">
             <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Invoice No</label>
-            <input type="text" className="w-full border border-amber-200 rounded-md p-2 bg-white font-bold outline-none shadow-sm" placeholder="INV/2024/0001" />
+            <input 
+              type="text" 
+              className="w-full border border-amber-200 rounded-md p-2 bg-white font-bold outline-none shadow-sm" 
+              placeholder="INV/2024/0001" 
+              value={invoiceNo}
+              onChange={(e) => setInvoiceNo(e.target.value)}
+            />
           </div>
 
           {/* Date Section - Fixed wrapping div and label */}
@@ -229,7 +368,11 @@ const BillingV4 = () => {
 
           <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50">
             <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Place of Supply</label>
-            <select className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm appearance-none font-medium">
+            <select 
+              className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm appearance-none font-medium"
+              value={placeOfSupply}
+              onChange={(e) => setPlaceOfSupply(e.target.value)}
+            >
               <option>Maharashtra (27)</option>
               <option>Gujarat (24)</option>
             </select>
@@ -264,14 +407,44 @@ const BillingV4 = () => {
             <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-amber-200/50">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Customer Name</label>
               <div className="relative">
-                <input type="text" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white focus:ring-2 focus:ring-blue-400 outline-none shadow-sm transition-all font-bold" placeholder="Search or enter name..." />
+                <input 
+                  type="text" 
+                  className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white focus:ring-2 focus:ring-blue-400 outline-none shadow-sm transition-all font-bold" 
+                  placeholder="Search or enter name..." 
+                  value={customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    searchCustomers(e.target.value);
+                  }}
+                  onFocus={() => customerSuggestions.length > 0 && setShowCustomerDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                />
                 <User size={14} className="absolute left-2.5 top-3 text-slate-400" />
+                {showCustomerDropdown && customerSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border border-amber-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-1">
+                    {customerSuggestions.map((customer, index) => (
+                      <div
+                        key={index}
+                        className="p-2 hover:bg-amber-50 cursor-pointer border-b border-amber-100 last:border-b-0"
+                        onClick={() => selectCustomer(customer)}
+                      >
+                        <div className="font-bold">{customer.customerName}</div>
+                        <div className="text-sm text-slate-500">{customer.gstin} - {customer.state}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Customer Type</label>
-              <select className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm font-medium">
+              <select 
+                className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm font-medium"
+                value={selectedCustomer?.customerType || ''}
+                onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, customerType: e.target.value} : null)}
+              >
+                <option value="">Select Type</option>
                 <option>Registered (GST)</option>
                 <option>Unregistered</option>
                 <option>Composition</option>
@@ -290,7 +463,13 @@ const BillingV4 = () => {
             <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50 bg-blue-50/20">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">GST Number</label>
               <div className="relative">
-                <input type="text" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm uppercase" placeholder="27AAAAA0000A1Z5" />
+                <input 
+                  type="text" 
+                  className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm uppercase" 
+                  placeholder="27AAAAA0000A1Z5" 
+                  value={selectedCustomer?.gstin || ''}
+                  onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, gstin: e.target.value} : null)}
+                />
                 <Landmark size={14} className="absolute left-2.5 top-3 text-slate-400" />
               </div>
             </div>
@@ -306,7 +485,13 @@ const BillingV4 = () => {
             <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Mobile Number</label>
               <div className="relative">
-                <input type="text" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all" placeholder="98XXXXXXXX" />
+                <input 
+                  type="text" 
+                  className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all" 
+                  placeholder="98XXXXXXXX" 
+                  value={selectedCustomer?.mobileNo || ''}
+                  onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, mobileNo: e.target.value} : null)}
+                />
                 <Send size={14} className="absolute left-2.5 top-3 text-slate-400" />
               </div>
             </div>
@@ -314,7 +499,13 @@ const BillingV4 = () => {
             <div className="col-span-12 md:col-span-3 p-4 border-b border-amber-200/50">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Email ID</label>
               <div className="relative">
-                <input type="email" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all" placeholder="customer@email.com" />
+                <input 
+                  type="email" 
+                  className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all" 
+                  placeholder="customer@email.com" 
+                  value={selectedCustomer?.email || ''}
+                  onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, email: e.target.value} : null)}
+                />
                 <Mail size={14} className="absolute left-2.5 top-3 text-slate-400" />
               </div>
             </div>
@@ -323,14 +514,26 @@ const BillingV4 = () => {
             <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-amber-200/50">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Billing Address</label>
               <div className="relative">
-                <input type="text" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm" placeholder="Street, City, Zip..." />
+                <input 
+                  type="text" 
+                  className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm" 
+                  placeholder="Street, City, Zip..." 
+                  value={selectedCustomer?.billingAddress || ''}
+                  onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, billingAddress: e.target.value} : null)}
+                />
                 <MapPin size={14} className="absolute left-2.5 top-3 text-slate-400" />
               </div>
             </div>
 
             <div className="col-span-12 md:col-span-2 p-4 border-r border-b border-amber-200/50 bg-slate-50/30">
               <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Billing State ID</label>
-              <input type="text" className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm" placeholder="27" />
+              <input 
+                type="text" 
+                className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm" 
+                placeholder="27" 
+                value={selectedCustomer?.stateCode || ''}
+                onChange={(e) => setSelectedCustomer(prev => prev ? {...prev, stateCode: e.target.value} : null)}
+              />
             </div>
 
             <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-amber-200/50">
@@ -394,13 +597,35 @@ const BillingV4 = () => {
 
                     {/* Item Name */}
                     <td className="p-1 border-r border-slate-50">
-                      <input
-                        className="w-full bg-transparent border-none focus:ring-2 focus:ring-blue-500/10 rounded px-1 py-1 text-[14px] text-slate-700 placeholder:text-slate-300 transition-all outline-none font-medium"
-                        type="text"
-                        value={item.itemName}
-                        onChange={(e) => handleItemChange(idx, 'itemName', e.target.value)}
-                        placeholder="Item description..."
-                      />
+                      <div className="relative">
+                        <input
+                          className="w-full bg-transparent border-none focus:ring-2 focus:ring-blue-500/10 rounded px-1 py-1 text-[14px] text-slate-700 placeholder:text-slate-300 transition-all outline-none font-medium"
+                          type="text"
+                          value={item.itemName}
+                          onChange={(e) => {
+                            handleItemChange(idx, 'itemName', e.target.value);
+                            setItemSearch(e.target.value);
+                            searchItems(e.target.value);
+                          }}
+                          onFocus={() => itemSuggestions.length > 0 && setShowItemDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowItemDropdown(false), 200)}
+                          placeholder="Item description..."
+                        />
+                        {showItemDropdown && itemSuggestions.length > 0 && (
+                          <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-1">
+                            {itemSuggestions.map((suggestion, sIndex) => (
+                              <div
+                                key={sIndex}
+                                className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-b-0"
+                                onClick={() => selectItem(idx, suggestion)}
+                              >
+                                <div className="font-bold">{suggestion.itemName}</div>
+                                <div className="text-sm text-slate-500">Code: {suggestion.itemCode} | HSN: {suggestion.hsnCode}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
 
@@ -409,6 +634,8 @@ const BillingV4 = () => {
                       <input
                         className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[14px] text-slate-500 outline-none"
                         type="text"
+                        value={item.hsn}
+                        onChange={(e) => handleItemChange(idx, 'hsn', e.target.value)}
                         placeholder="HSN"
                       />
                     </td>
@@ -418,6 +645,8 @@ const BillingV4 = () => {
                       <input
                         className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[14px] text-slate-500 outline-none"
                         type="text"
+                        value={item.batch || ''}
+                        onChange={(e) => handleItemChange(idx, 'batch', e.target.value)}
                         placeholder="Batch"
                       />
                     </td>
@@ -621,141 +850,66 @@ const BillingV4 = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      <br />
-      {/* SECONDARY INFO CARDS */}
-      {/* --- UPDATED SECONDARY INFO CARDS SECTION --- */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* UPDATED BANK & PAYMENT SETUP */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h4 className="font-black text-slate-800 uppercase tracking-tighter text-[11px] flex items-center gap-2">
-              <Landmark size={14} className="text-indigo-600" /> Financial Settlement
-            </h4>
-            <span className="text-[8px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full tracking-widest uppercase">Verified Gateway</span>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest block">Payment Mode</span>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'NEFT', icon: <Landmark size={16} />, label: 'Bank/NEFT' },
-                  { id: 'CASH', icon: <CreditCard size={16} />, label: 'Cash' },
-                  { id: 'UPI', icon: <Send size={16} />, label: 'UPI / QR' }
-                ].map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => setPaymentMode(mode.id)}
-                    className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all active:scale-95 ${paymentMode === mode.id
-                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm'
-                      : 'border-slate-50 bg-slate-50/50 hover:border-slate-200 hover:bg-white'
-                      }`}
-                  >
-                    <div className={paymentMode === mode.id ? 'text-indigo-600' : 'text-slate-400'}>{mode.icon}</div>
-                    <span className={`text-[9px] font-black uppercase ${paymentMode === mode.id ? 'text-indigo-700' : 'text-slate-500'}`}>{mode.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative group overflow-hidden rounded-xl">
-              <div className="flex items-center gap-3 bg-slate-900 p-3 border border-slate-800 group-hover:border-indigo-500 transition-all cursor-pointer">
-                <div className="bg-slate-800 p-2 rounded-lg text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                  <Landmark size={16} />
-                </div>
-                <div className="flex-1">
-                  <span className="text-slate-500 font-black uppercase text-[8px] tracking-[0.2em] block leading-none mb-1">Due Date (Deadline)</span>
-                  <input type="date" className="w-full bg-transparent border-none p-0 focus:ring-0 font-black text-white text-[12px] cursor-pointer color-scheme-dark invert-[0.8]" defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} />
-                </div>
-              </div>
-              <div className="absolute bottom-0 left-0 h-[2px] w-0 bg-indigo-500 group-hover:w-full transition-all duration-300"></div>
-            </div>
+        {/* LEFT SECTION (Narration Area) */}
+        <div className="col-span-7 sm:col-span-12 p-6 bg-slate-50 border-r border-slate-200">
+          <div className="h-full flex flex-col justify-end">
+            <span className="text-slate-900 font-bold uppercase text-[15x] mb-2">Narration</span>
+            <textarea 
+              className="w-full bg-white border border-slate-200 rounded-lg p-3 h-24 focus:ring-2 focus:ring-blue-400 outline-none text-slate-600" 
+              placeholder="Enter any additional information here..."
+              value={narration}
+              onChange={(e) => setNarration(e.target.value)}
+            ></textarea>
           </div>
         </div>
 
-        {/* UPDATED LOGISTICS SECTION */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h4 className="font-black text-slate-800 uppercase tracking-tighter text-[11px] flex items-center gap-2">
-              <Truck size={14} className="text-orange-500" /> Logistics Intelligence
-            </h4>
-            <span className="text-[8px] font-black px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full tracking-widest uppercase">Live Tracking</span>
-          </div>
+        {/* FINAL ACTION BAR */}
+        <div className="col-span-12 flex bg-slate-900/95 backdrop-blur-md text-white p-3 gap-3 items-center border-t border-slate-800 bottom-0 z-[100]">
 
-          <div className="grid grid-cols-1 gap-4">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-500 transition-colors">
-                <Truck size={16} />
-              </div>
-              <input className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 font-bold text-slate-700 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 focus:bg-white outline-none transition-all text-[12px] placeholder:text-transparent" placeholder="Vehicle" />
-              <label className="absolute left-10 top-2 text-[8px] font-black text-slate-400 uppercase tracking-widest pointer-events-none group-focus-within:text-orange-500 transition-all">Vehicle Number</label>
-            </div>
+          {/* PRIMARY ACTION: SAVE */}
+          <button 
+            className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30"
+            onClick={saveInvoice}
+          >
+            <Save size={16} strokeWidth={2.5} />
+            Save Invoice
+          </button>
 
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-500 transition-colors">
-                <User size={16} />
-              </div>
-              <input className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 font-bold text-slate-700 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 focus:bg-white outline-none transition-all text-[12px] placeholder:text-transparent" placeholder="Transporter" />
-              <label className="absolute left-10 top-2 text-[8px] font-black text-slate-400 uppercase tracking-widest pointer-events-none group-focus-within:text-orange-500 transition-all">Transporter Name</label>
-            </div>
-          </div>
+          {/* SECONDARY ACTION: PRINT */}
+          <button className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all active:bg-slate-900">
+            <Printer size={16} className="text-slate-400" />
+            Save & Print
+          </button>
+
+          {/* COMMUNICATION */}
+          <button className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all">
+            <Mail size={16} className="text-slate-400" />
+            Email
+          </button>
+
+          {/* SEPARATOR */}
+          <div className="h-6 w-[1px] bg-slate-700 mx-2" />
+
+          {/* COMPLIANCE ACTIONS */}
+          <button className="flex items-center gap-2.5 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white px-4 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest border border-indigo-500/30 transition-all shadow-xl shadow-indigo-900/10">
+            <Send size={16} />
+            e-Invoice
+          </button>
+
+          <button className="flex items-center gap-2.5 bg-orange-600/10 hover:bg-orange-600 text-orange-500 hover:text-white px-4 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest border border-orange-500/30 transition-all shadow-xl shadow-orange-900/10">
+            <Truck size={16} />
+            e-Way Bill
+          </button>
+
+          {/* DANGER ACTION */}
+          <button className="flex items-center gap-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider ml-auto transition-all group">
+            <XCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+            Cancel
+          </button>
         </div>
       </div>
-      <br />
-      <div className="col-span-7 sm:col-span-12 p-6 bg-slate-50 border-r border-slate-200">
-        <div className="h-full flex flex-col justify-end">
-          <span className="text-slate-900 font-bold uppercase text-[15x] mb-2">Narration</span>
-          <textarea className="w-full bg-white border border-slate-200 rounded-lg p-3 h-24 focus:ring-2 focus:ring-blue-400 outline-none text-slate-600" placeholder="Enter any additional information here..."></textarea>
-        </div>
-      </div>
-
-      {/* FINAL ACTION BAR */}
-      <div className="flex bg-slate-900/95 backdrop-blur-md text-white p-3 gap-3 items-center border-t border-slate-800  bottom-0 z-[100]">
-
-        {/* PRIMARY ACTION: SAVE */}
-        <button className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30">
-          <Save size={16} strokeWidth={2.5} />
-          Save Invoice
-        </button>
-
-        {/* SECONDARY ACTION: PRINT */}
-        <button className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all active:bg-slate-900">
-          <Printer size={16} className="text-slate-400" />
-          Save & Print
-        </button>
-
-        {/* COMMUNICATION */}
-        <button className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all">
-          <Mail size={16} className="text-slate-400" />
-          Email
-        </button>
-
-        {/* SEPARATOR */}
-        <div className="h-6 w-[1px] bg-slate-700 mx-2" />
-
-        {/* COMPLIANCE ACTIONS */}
-        <button className="flex items-center gap-2.5 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white px-4 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest border border-indigo-500/30 transition-all shadow-xl shadow-indigo-900/10">
-          <Send size={16} />
-          e-Invoice
-        </button>
-
-        <button className="flex items-center gap-2.5 bg-orange-600/10 hover:bg-orange-600 text-orange-500 hover:text-white px-4 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest border border-orange-500/30 transition-all shadow-xl shadow-orange-900/10">
-          <Truck size={16} />
-          e-Way Bill
-        </button>
-
-        {/* DANGER ACTION */}
-        <button className="flex items-center gap-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider ml-auto transition-all group">
-          <XCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
-          Cancel
-        </button>
-      </div>
-
-
     </div>
   );
-};
-
+}
 export default BillingV4;
