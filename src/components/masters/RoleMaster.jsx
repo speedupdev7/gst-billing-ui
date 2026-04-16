@@ -14,6 +14,7 @@ export default function RoleMaster() {
   // State for logic handling
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
     roleId:"",
@@ -106,6 +107,12 @@ export default function RoleMaster() {
   const handleConfirmTrigger = (e) => {
     if (e) e.preventDefault();
     if (loading) return;
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors({});
     setIsDialogOpen(true);
   };
 
@@ -116,10 +123,21 @@ export default function RoleMaster() {
       ...s,
       [name]: type === "checkbox" ? checked : value,
     }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!form.roleCode.trim()) newErrors.roleCode = "Role Code is required";
+    if (!form.roleName.trim()) newErrors.roleName = "Role Name is required";
+    if (!form.description.trim()) newErrors.description = "Description is required";
+    return newErrors;
   };
 
 
-  const handleReset = () =>
+  const handleReset = () => {
     setForm({
       roleCode: "",
       roleName: "",
@@ -127,9 +145,10 @@ export default function RoleMaster() {
       isSystemRole: false,
       isActive: true,
     });
+    setErrors({});
+  };
 
-  const inputClass =
-    "mt-1 px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-400 outline-none bg-white shadow-sm w-full";
+  const inputClass = (field) => `mt-1 px-3 py-2 border bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 shadow-sm w-full rounded-md ${errors[field] ? "border-red-500" : "border-slate-300"}`;
 
   return (
     <div className="bg-white rounded-xl shadow-2xl p-6 border border-slate-200 min-h-[400px]">
@@ -167,14 +186,14 @@ export default function RoleMaster() {
             {/* Role Code */}
             <div>
               <label className="text-sm font-medium text-slate-600">
-                Role Code
+                Role Code <span className="text-red-500">*</span>
               </label>
               <input
                 name="roleCode"
                 value={form.roleCode}
                 onChange={handleChange}
                 type="text"
-                className={inputClass}
+                className={inputClass("roleCode")}
                 placeholder="Enter role code (e.g. ADMIN, USER)"
               />
             </div>
@@ -182,14 +201,14 @@ export default function RoleMaster() {
             {/* Role Name */}
             <div>
               <label className="text-sm font-medium text-slate-600">
-                Role Name
+                Role Name <span className="text-red-500">*</span>
               </label>
               <input
                 name="roleName"
                 value={form.roleName}
                 onChange={handleChange}
                 type="text"
-                className={inputClass}
+                className={inputClass("roleName")}
                 placeholder="Enter role name (e.g. Administrator)"
               />
             </div>
@@ -197,14 +216,14 @@ export default function RoleMaster() {
             {/* Description */}
             <div className="md:col-span-2">
               <label className="text-sm font-medium text-slate-600">
-                Description
+                Description <span className="text-red-500">*</span>
               </label>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
                 rows={3}
-                className={inputClass}
+                className={inputClass("description")}
                 placeholder="Short description about this role"
               />
             </div>

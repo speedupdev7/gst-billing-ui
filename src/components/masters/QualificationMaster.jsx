@@ -15,6 +15,7 @@ export default function QualificationMaster() {
   // State for logic handling
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
     qualificationCode: "",
@@ -74,6 +75,16 @@ export default function QualificationMaster() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((s) => ({ ...s, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!form.qualificationCode.trim()) newErrors.qualificationCode = "Qualification Code is required";
+    if (!form.qualificationName.trim()) newErrors.qualificationName = "Qualification Name is required";
+    return newErrors;
   };
   // --- Handles which API to call ---
   const handleSubmit = async () => {
@@ -90,19 +101,26 @@ export default function QualificationMaster() {
   const handleConfirmTrigger = (e) => {
     if (e) e.preventDefault();
     if (loading) return;
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors({});
     setIsDialogOpen(true);
   };
 
-  const handleReset = () =>
+  const handleReset = () => {
     setForm({
       qualificationCode: "",
       qualificationName: "",
       qualificationType: "",
       description: "",
     });
+    setErrors({});
+  };
 
-  const inputClass =
-    "mt-1 px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-400 outline-none bg-white shadow-sm w-full";
+  const inputClass = (field) => `mt-1 px-3 py-2 border bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 shadow-sm w-full rounded-md ${errors[field] ? "border-red-500" : "border-slate-300"}`;
 
   return (
     <div className="bg-white rounded-xl shadow-2xl p-6 border border-slate-200 min-h-[400px]">
@@ -142,28 +160,28 @@ export default function QualificationMaster() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="text-sm font-medium text-slate-600">
-                Qualification Code
+                Qualification Code <span className="text-red-500">*</span>
               </label>
               <input
                 name="qualificationCode"
                 value={form.qualificationCode}
                 onChange={handleChange}
                 type="text"
-                className={inputClass}
+                className={inputClass("qualificationCode")}
                 placeholder="Enter qualification code"
               />
             </div>
 
             <div>
               <label className="text-sm font-medium text-slate-600">
-                Qualification Name
+                Qualification Name <span className="text-red-500">*</span>
               </label>
               <input
                 name="qualificationName"
                 value={form.qualificationName}
                 onChange={handleChange}
                 type="text"
-                className={inputClass}
+                className={inputClass("qualificationName")}
                 placeholder="Enter qualification name"
               />
             </div>
@@ -192,7 +210,7 @@ export default function QualificationMaster() {
                 value={form.description}
                 onChange={handleChange}
                 rows={3}
-                className={inputClass}
+                className={inputClass("description")}
                 placeholder="Short description about this qualification"
               />
             </div>

@@ -83,7 +83,7 @@ export default function TransportMaster() {
 
         <button
           onClick={() => navigate("/transport-master-list")}
-          className="px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white shadow hover:bg-indigo-700"
+          className="px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white shadow hover:bg-indigo-700 cursor-pointer"
         >
           VIEW LIST
         </button>

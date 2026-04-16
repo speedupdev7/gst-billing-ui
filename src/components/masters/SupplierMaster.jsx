@@ -15,6 +15,7 @@ export default function SupplierMaster() {
   // State for logic handling
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [errors, setErrors] = useState({});
 
   // Supplier form fields
   const [form, setForm] = useState({
@@ -54,6 +55,45 @@ export default function SupplierMaster() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((s) => ({ ...s, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!form.supplierName.trim()) newErrors.supplierName = "Supplier Name is required";
+    if (!form.address.trim()) newErrors.address = "Address is required";
+    if (!form.city.trim()) newErrors.city = "City is required";
+    if (!form.state.trim()) newErrors.state = "State is required";
+    if (!form.pinCode.trim()) newErrors.pinCode = "Pin Code is required";
+    if (!form.stateCode.trim()) newErrors.stateCode = "State Code is required";
+    if (!form.email.trim()) newErrors.email = "Email is required";
+    if (!form.mobileNo.trim()) newErrors.mobileNo = "Mobile Number is required";
+    if (!form.bankName.trim()) newErrors.bankName = "Bank Name is required";
+    if (!form.accountNumber.trim()) newErrors.accountNumber = "Account Number is required";
+    if (form.gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(form.gstin)) {
+      newErrors.gstin = "Invalid GSTIN format";
+    }
+    if (form.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.pan)) {
+      newErrors.pan = "Invalid PAN format";
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = "Invalid email format";
+    }
+    if (form.mobileNo && !/^[6-9]\d{9}$/.test(form.mobileNo)) {
+      newErrors.mobileNo = "Invalid mobile number (10 digits starting with 6-9)";
+    }
+    if (form.pinCode && !/^\d{6}$/.test(form.pinCode)) {
+      newErrors.pinCode = "Invalid pincode (6 digits)";
+    }
+    if (form.stateCode && !/^\d{2}$/.test(form.stateCode)) {
+      newErrors.stateCode = "Invalid state code (2 digits)";
+    }
+    if (form.accountNumber && !/^\d+$/.test(form.accountNumber)) {
+      newErrors.accountNumber = "Account number must be numeric";
+    }
+    return newErrors;
   };
 
   // --- 2.  PUT API CALLING ---
@@ -103,6 +143,12 @@ export default function SupplierMaster() {
   const handleConfirmTrigger = (e) => {
     if (e) e.preventDefault();
     if (loading) return;
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors({});
     setIsDialogOpen(true);
   };
 
@@ -113,10 +159,10 @@ export default function SupplierMaster() {
       city: "", pinCode: "", state: "", stateCode: "",
       bankName: "", accountNumber: "", ifsc: "", branchName: ""
     });
+    setErrors({});
   };
 
-  const inputClass =
-    "w-full rounded-md border border-slate-300 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 shadow-sm";
+  const inputClass = (field) => `w-full rounded-md border bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 shadow-sm px-3 py-2 ${errors[field] ? "border-red-500" : "border-slate-300"}`;
 
   return (
     <div className="w-full m-0 p-0 bg-white">
@@ -159,7 +205,7 @@ export default function SupplierMaster() {
               value={form.supplierName}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("supplierName")}`}
               placeholder="e.g., ABC Suppliers Pvt. Ltd."
               required
             />
@@ -171,7 +217,7 @@ export default function SupplierMaster() {
               value={form.contactPerson}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("contactPerson")}`}
               placeholder="Full Name"
             />
           </div>
@@ -180,46 +226,42 @@ export default function SupplierMaster() {
         {/* Row 2: Tax Info & Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs font-medium text-slate-600">GSTIN</label>
             <input
               name="gstin"
               value={form.gstin}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("gstin")}`}
               placeholder="22AAAAA0000A1Z5"
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600">PAN</label>
             <input
               name="pan"
               value={form.pan}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("pan")}`}
               placeholder="ABCDE1234F"
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600">Mobile No</label>
             <input
               name="mobileNo"
               value={form.mobileNo}
               onChange={handleChange}
               type="tel"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("mobileNo")}`}
               placeholder="+91-0000000000"
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600">Email</label>
             <input
               name="email"
               value={form.email}
               onChange={handleChange}
               type="email"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("email")}`}
               placeholder="supplier@email.com"
             />
           </div>
@@ -233,22 +275,22 @@ export default function SupplierMaster() {
               name="address"
               value={form.address}
               onChange={handleChange}
-              className={`${inputClass} px-3 py-2`}
+              className={`${inputClass("address")}`}
               placeholder="Address Line 1"
             />
             <input
               name="address1"
               value={form.address1}
               onChange={handleChange}
-              className={`${inputClass} px-3 py-2`}
+              className={`${inputClass("address1")}`}
               placeholder="Address Line 2"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <input name="city" value={form.city} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="City" />
-            <input name="pinCode" value={form.pinCode} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="Pin Code" />
-            <input name="state" value={form.state} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="State" />
-            <input name="stateCode" value={form.stateCode} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="State Code" />
+            <input name="city" value={form.city} onChange={handleChange} className={`${inputClass("city")}`} placeholder="City" />
+            <input name="pinCode" value={form.pinCode} onChange={handleChange} className={`${inputClass("pinCode")}`} placeholder="Pin Code" />
+            <input name="state" value={form.state} onChange={handleChange} className={`${inputClass("state")}`} placeholder="State" />
+            <input name="stateCode" value={form.stateCode} onChange={handleChange} className={`${inputClass("stateCode")}`} placeholder="State Code" />
           </div>
         </div>
 
@@ -256,10 +298,10 @@ export default function SupplierMaster() {
         <div className="space-y-3 pt-2">
           <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <input name="bankName" value={form.bankName} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="Bank Name" />
-            <input name="accountNumber" value={form.accountNumber} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="Account Number" />
-            <input name="ifsc" value={form.ifsc} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="IFSC Code" />
-            <input name="branchName" value={form.branchName} onChange={handleChange} className={`${inputClass} px-3 py-2`} placeholder="Branch Name" />
+            <input name="bankName" value={form.bankName} onChange={handleChange} className={`${inputClass("bankName")}`} placeholder="Bank Name" />
+            <input name="accountNumber" value={form.accountNumber} onChange={handleChange} className={`${inputClass("accountNumber")}`} placeholder="Account Number" />
+            <input name="ifsc" value={form.ifsc} onChange={handleChange} className={`${inputClass("ifsc")}`} placeholder="IFSC Code" />
+            <input name="branchName" value={form.branchName} onChange={handleChange} className={`${inputClass("branchName")}`} placeholder="Branch Name" />
           </div>
         </div>
 

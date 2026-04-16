@@ -134,9 +134,9 @@ export default function FinancialYearList() {
 
           <Link
             to="/financial-year"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold flex items-center gap-2"
+            className="px-3 py-1.5 bg-blue-900 text-white rounded-sm text-xs font-semibold transition"
           >
-            <Plus className="w-4 h-4" /> Add Year
+            <Plus className="w-3.5 h-3.5" /> Add Year
           </Link>
         </div>
       </div>

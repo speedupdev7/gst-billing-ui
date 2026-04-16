@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 /* ---------------- react-icons imports ---------------- */
-import { FiFileText, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiLogOut,FiMenu, FiBell } from "react-icons/fi";
+import { FiFileText, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiLogOut, FiMenu, FiBell } from "react-icons/fi";
 
 /* ---------------- Asset Imports ---------------- */
 import logoImage from "../assets/logoImage.png";
@@ -29,7 +29,6 @@ const ICON_MAP = {
   assign: AssignFunctionalityImage,
 };
 
-/* ---------------- initialMenu ---------------- */
 const initialMenu = [
   { key: "home", title: "Home", icon: "home", path: "/" },
   { key: "dashboard", title: "Dashboard", icon: "dashboard", path: "/dashboard" },
@@ -70,8 +69,8 @@ const initialMenu = [
     icon: "purchase",
     children: [
       { key: "asset-purchase", title: "Asset Purchase", path: "/asset-purchase" },
-      { key: "purchase-return", title: "Purchase Return", path: "/purchase-return" },
-      { key: "purchase-stock", title: "Purchase Stock", path: "/purchase-stock" },
+      { key: "purchase-return", title: " Stock Purchase Return", path: "/purchase-return" },
+      { key: "purchase-stock", title: "Stock Purchase", path: "/purchase-stock" },
     ],
   },
   {
@@ -79,7 +78,6 @@ const initialMenu = [
     title: "Billing",
     icon: "billing",
     children: [
-      // { key: "billing", title: "Billing", path: "/billing" },
       { key: "billing_v1", title: "Billing V1", path: "/billing_v1" },
       { key: "billing_v2", title: "Billing V2", path: "/billing_v2" },
       { key: "billing_v3", title: "Billing V3", path: "/billing_v3" },
@@ -105,7 +103,6 @@ const initialMenu = [
       { key: "employee-expenses", title: "Employee Expenses", path: "/employee-expenses" },
     ],
   },
-
   {
     key: "reports",
     title: "Reports",
@@ -142,7 +139,6 @@ const initialMenu = [
   { key: "assign", title: "Assign Functionality", icon: "assign", path: "/assign-functionality" },
 ];
 
-/* ---------------- Icon Renderer ---------------- */
 const ThreeDIcon = ({ iconKey, active, open }) => {
   const IconSource = ICON_MAP[iconKey] || FiFileText;
   const isImage = typeof IconSource === 'string' || (typeof IconSource === 'object' && !IconSource.render);
@@ -183,7 +179,6 @@ const DashboardLayout = () => {
   const userRole = "Administrator";
   const userInitial = userName.charAt(0).toUpperCase();
 
-  /* ---------------- NEW THEME LOGIC ADDED HERE ---------------- */
   useEffect(() => {
     const applyTheme = (settings) => {
       if (!settings) return;
@@ -195,16 +190,13 @@ const DashboardLayout = () => {
         : settings.navbarColor);
     };
 
-    // Load initial theme
     const saved = localStorage.getItem("app-settings");
     if (saved) applyTheme(JSON.parse(saved));
 
-    // Listener for live updates from ThemeControls
     const handleUpdate = (e) => applyTheme(e.detail);
     window.addEventListener("app-theme-updated", handleUpdate);
     return () => window.removeEventListener("app-theme-updated", handleUpdate);
   }, []);
-  /* ----------------------------------------------------------- */
 
   const toggleGroup = useCallback((key) => {
     setExpandedGroups((prev) => {
@@ -239,19 +231,6 @@ const DashboardLayout = () => {
     const t = setInterval(update, 60000);
     return () => clearInterval(t);
   }, []);
-
-  const activePageTitle = useMemo(() => {
-    let title = "GST App";
-    const walk = (arr) => {
-      for (const it of arr) {
-        if (it.path && location.pathname === it.path) { title = it.title; return true; }
-        if (it.children && walk(it.children)) return true;
-      }
-      return false;
-    };
-    walk(menu);
-    return title;
-  }, [location.pathname, menu]);
 
   const filteredMenu = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -330,6 +309,18 @@ const DashboardLayout = () => {
     );
   };
 
+  const CompanyBranding = () => (
+  <div className="flex items-center gap-3 animate-in fade-in duration-500">
+    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black">
+      <img src={logoImage} alt="logo" className="w-full h-full object-contain" />
+    </div>
+    {/* text-white ensures it shows on the blue/dark navbar when the drawer is closed */}
+    <span className="text-xl font-black tracking-tighter uppercase font-poppins text-white">
+      ABC<span className="text-orange-500">123</span>
+    </span>
+  </div>
+);
+
   return (
     <div className="flex h-screen bg-[#F0F2F5] text-slate-800 font-poppins">
       <style>{`
@@ -343,12 +334,17 @@ const DashboardLayout = () => {
         className={`relative transition-all duration-500 border-r border-slate-200 flex flex-col z-30 h-full ${open ? "w-72" : "w-20"} shrink-0 shadow-xl`}
       >
         <div className="flex items-center h-14 px-5 border-b border-slate-100 shrink-0">
-          <div className={`flex items-center gap-3 transition-all duration-300 ${!open && "opacity-0 invisible w-0"}`}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black ">
-              <img src={logoImage} alt="logo" />
+          <div className={`transition-all duration-300 ${open ? "opacity-100 visible" : "opacity-0 invisible w-0 overflow-hidden"}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black">
+                <img src={logoImage} alt="logo" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-xl font-black tracking-tighter uppercase font-poppins text-black">
+                abc<span className="text-orange-500">123</span>
+              </span>
             </div>
-            <span className="text-xl font-black text-black tracking-tighter uppercase font-semibold font-poppins">abc<span className="text-orange-500">123</span></span>
           </div>
+
           <button
             onClick={() => setOpen(!open)}
             style={{ backgroundColor: 'var(--primary-color, #3515d8)' }}
@@ -378,6 +374,16 @@ const DashboardLayout = () => {
         <nav className="flex-1 drawer-scrollbar overflow-y-auto px-3 py-1 space-y-0 overflow-x-hidden pr-1">
           {filteredMenu.map((item) => renderMenuItemRecursive(item))}
         </nav>
+
+        <div className="lg:hidden mt-auto border-t border-slate-100 p-3">
+            <button 
+                onClick={() => navigate("/login")}
+                className={`flex items-center gap-4 w-full px-3 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition-all ${!open ? 'justify-center' : ''}`}
+            >
+                <FiLogOut size={20} className="shrink-0" />
+                {open && <span className="text-[13px] font-black uppercase tracking-widest">Log Out</span>}
+            </button>
+        </div>
       </aside>
 
       {/* MAIN AREA */}
@@ -386,9 +392,13 @@ const DashboardLayout = () => {
           style={{ background: 'var(--nav-bg, linear-gradient(90deg, #0F172A, #3B82F6))' }}
           className="flex items-center justify-between px-8 h-14 shrink-0 z-20 shadow-xl"
         >
-          <div className="flex items-center gap-4 text-white">
-            <div className="h-10 w-1 bg-white/20 rounded-full hidden md:block" />
-            <h1 className="font-black tracking-tight text-lg uppercase">{activePageTitle}</h1>
+          <div className="flex items-center gap-6">
+            {!open && (
+              <div className="flex items-center">
+                <CompanyBranding />
+              </div>
+            )}
+            {/* Page title section removed from here */}
           </div>
 
           <div className="flex items-center gap-6">
@@ -404,7 +414,7 @@ const DashboardLayout = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 pl-4 border-l border-white/10">
+            <div className="hidden lg:flex items-center gap-4 pl-4 border-l border-white/10">
               <button className="p-2.5 bg-white/5 rounded-xl text-white hover:bg-white/10 relative transition-all">
                 <FiBell size={20} />
                 <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-800"></span>
@@ -444,14 +454,16 @@ const DashboardLayout = () => {
                 )}
               </div>
             </div>
+
+            <div className="lg:hidden text-white p-2">
+                <FiBell size={20} />
+            </div>
           </div>
         </header>
 
         <main className="flex-1 p-6 bg-[#F0F2F5] overflow-y-auto">
           <div className="max-w-[1800px] mx-auto min-h-full">
-            <div >
-              <Outlet/>
-            </div>
+            <Outlet/>
           </div>
         </main>
       </div>

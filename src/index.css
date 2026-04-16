@@ -115,3 +115,12 @@ body {
   to { width: 0%; }
 }
 
+/* dark and ligth mode */
+/* This ensures the background of the entire browser changes */
+html.dark body {
+  background-color: #0f172a; /* Same as slate-900 */
+  color: #f8fafc;            /* Same as slate-50 */
+}
+
+
+

@@ -38,7 +38,7 @@ const CityMasterList = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   // FETCH DATA
   const fetchCities = () => {
-    axios.get("/api/v1/cities")
+    axios.get("/api/v1/cities?page=0&size=1000")
       .then((res) => {
         // Extract content from paginated response, preserving backend order
         const actualData = res.data.content || (Array.isArray(res.data) ? res.data : res.data.cities || []);
@@ -101,6 +101,15 @@ const CityMasterList = () => {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
+
+  const exportColumns = [
+    { key: "cityCode", header: "City Code" },
+    { key: "cityName", header: "City Name" },
+    { key: "stateName", header: "State" },
+    { key: "countryName", header: "Country" },
+    { key: "stdCode", header: "STD Code" },
+    { key: "postalCode", header: "Postal Code" },
+  ];
 
   const handleExport = (type) => {
     const sourceData = filtered;
@@ -221,8 +230,12 @@ const CityMasterList = () => {
               className="bg-transparent outline-none text-sm w-full"
             />
           </div>
-          <Link to="/city-master" className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
-            <Plus className="w-4 h-4" /> Add City
+          <Link
+            to="/city-master"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 text-white rounded-sm text-xs font-semibold transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add City
           </Link>
         </div>
       </div>

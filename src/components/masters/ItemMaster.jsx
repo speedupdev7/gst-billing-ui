@@ -1,57 +1,164 @@
-// src/pages/ItemMaster.jsx
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { FiSave, FiX, FiPackage } from "react-icons/fi";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
+import { useToast } from "../contextapi/ToastContext";
+import ReusableDialogueBox from "../contextapi/ReusableDialogueBox";
+import { FiSave, FiRefreshCcw, FiPackage, FiLoader } from "react-icons/fi";
 
 export default function ItemMaster() {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("id");
+
+  const [loading, setLoading] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [errors, setErrors] = useState({});
+
   const [form, setForm] = useState({
-    ItemName: "",
-    ItemNameDetails: "",
-    ItemCode: "",
-    HSNCode: "",
-    Unit: "",
-    GSTRate: "",
-    PurchasePrice: "",
-    SalePrice: "",
-    MRP: "",
-    OpeningStock: ""
+    itemName: "",
+    itemNameDetails: "",
+    itemCode: "",
+    hsnCode: "",
+    unit: "",
+    gstRate: "",
+    purchasePrice: "",
+    salePrice: "",
+    mrp: "",
+    openingStock: "",
   });
+
+  useEffect(() => {
+    if (editId) {
+      axios
+        .get(`/api/item-master/${editId}`)
+        .then((res) => {
+          setForm(res.data);
+        })
+        .catch((err) => {
+          console.error("Fetch Error:", err);
+          toast.error("Failed to load item details");
+        });
+    }
+  }, [editId, toast]);
+
+  const updateItem = async () => {
+    try {
+      const response = await axios.put(`/api/item-master/${editId}`, form);
+      toast.success("Updated successfully!");
+      navigate("/item-master-list");
+      console.log(response.data);
+    } catch (error) {
+      console.error("Update Error:", error);
+      toast.error("Error occurred while updating item");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveItem = async () => {
+    try {
+      const response = await axios.post("/api/item-master", form);
+      toast.success("Saved successfully!");
+      navigate("/item-master-list");
+      console.log(response.data);
+    } catch (error) {
+      console.error("Backend Error Detail:", error.response?.data);
+      console.error("Save Error:", error);
+      if (error.response && error.response.status === 409) {
+        toast.error("Item record already exists!");
+      } else {
+        toast.error("Error occurred while saving item");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setIsDialogOpen(false);
+    setLoading(true);
+
+    if (editId) {
+      await updateItem();
+    } else {
+      await saveItem();
+    }
+  };
+
+  const handleConfirmTrigger = (e) => {
+    if (e) e.preventDefault();
+    if (loading) return;
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors({});
+    setIsDialogOpen(true);
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.ItemName.trim() || !form.ItemCode.trim()) {
-      alert("Please fill Item Name and Item Code");
-      return;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
-    console.log("SUBMIT ITEM DATA:", form);
-    alert("Item saved (simulation). Check console for payload.");
   };
 
-  const handleReset = () =>
-    setForm({
-      ItemName: "",
-      ItemNameDetails: "",
-      ItemCode: "",
-      HSNCode: "",
-      Unit: "",
-      GSTRate: "",
-      PurchasePrice: "",
-      SalePrice: "",
-      MRP: "",
-      OpeningStock: ""
-    });
+  const validateForm = () => {
+    const newErrors = {};
+    if (!form.itemName.trim()) newErrors.itemName = "Item Name is required";
+    if (!form.itemCode.trim()) newErrors.itemCode = "Item Code is required";
+    if (form.hsnCode && !/^\d{4,8}$/.test(form.hsnCode)) {
+      newErrors.hsnCode = "HSN Code must be 4-8 digits";
+    }
+    if (form.gstRate && form.gstRate !== "" && (isNaN(Number(form.gstRate)) || Number(form.gstRate) < 0 || Number(form.gstRate) > 100)) {
+      newErrors.gstRate = "GST Rate must be between 0 and 100";
+    }
+    if (form.purchasePrice && form.purchasePrice !== "" && (isNaN(Number(form.purchasePrice)) || Number(form.purchasePrice) < 0)) {
+      newErrors.purchasePrice = "Purchase Price must be a positive number";
+    }
+    if (form.salePrice && form.salePrice !== "" && (isNaN(Number(form.salePrice)) || Number(form.salePrice) < 0)) {
+      newErrors.salePrice = "Sale Price must be a positive number";
+    }
+    if (form.mrp && form.mrp !== "" && (isNaN(Number(form.mrp)) || Number(form.mrp) < 0)) {
+      newErrors.mrp = "MRP must be a positive number";
+    }
+    if (form.openingStock && form.openingStock !== "" && (isNaN(Number(form.openingStock)) || Number(form.openingStock) < 0)) {
+      newErrors.openingStock = "Opening Stock must be a positive number";
+    }
+    return newErrors;
+  };
 
-  const inputClass =
-    "w-full rounded-md border border-slate-300 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 shadow-sm";
+  const handleReset = () => {
+    setForm({
+      itemName: "",
+      itemNameDetails: "",
+      itemCode: "",
+      hsnCode: "",
+      unit: "",
+      gstRate: "",
+      purchasePrice: "",
+      salePrice: "",
+      mrp: "",
+      openingStock: "",
+    });
+    setErrors({});
+  };
+
+  const inputClass = (field) => `w-full rounded-md border bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 shadow-sm ${errors[field] ? "border-red-500 bg-red-50" : "border-slate-300"}`;
 
   return (
     <div className="w-full m-0 p-0 bg-white">
-      {/* Header (compact) */}
+      <ReusableDialogueBox
+        isOpen={isDialogOpen}
+        title={editId ? "Confirm Update" : "Confirm Save"}
+        message={editId ? "Are you sure you want to update this item?" : "Are you sure you want to save this item?"}
+        onConfirm={handleSubmit}
+        onCancel={() => setIsDialogOpen(false)}
+      />
+
       <div className="w-full flex items-center justify-between px-3 py-3 border-b">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-indigo-600 text-white flex items-center justify-center text-lg shadow">
@@ -71,20 +178,18 @@ export default function ItemMaster() {
         </Link>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="w-full p-3 space-y-4">
-        {/* Item Name & Code - Divided 6-6 in one line */}
+      <form onSubmit={handleConfirmTrigger} className="w-full p-3 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[11px] font-semibold text-slate-600">
               Item Name <span className="text-red-500">*</span>
             </label>
             <input
-              name="ItemName"
-              value={form.ItemName}
+              name="itemName"
+              value={form.itemName}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-2 py-1.5 mt-0.5`}
+              className={`${inputClass("itemName")} px-2 py-1.5 mt-0.5`}
               placeholder="e.g., Blue Pen"
               required
             />
@@ -95,40 +200,38 @@ export default function ItemMaster() {
               Item Code <span className="text-red-500">*</span>
             </label>
             <input
-              name="ItemCode"
-              value={form.ItemCode}
+              name="itemCode"
+              value={form.itemCode}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-2 py-1.5 mt-0.5`}
+              className={`${inputClass("itemCode")} px-2 py-1.5 mt-0.5`}
               placeholder="e.g., BP-001"
               required
             />
           </div>
         </div>
 
-        {/* Details */}
         <div>
           <label className="text-xs font-medium text-slate-600">Item Details</label>
           <input
-            name="ItemNameDetails"
-            value={form.ItemNameDetails}
+            name="itemNameDetails"
+            value={form.itemNameDetails}
             onChange={handleChange}
             type="text"
-            className={`${inputClass} px-3 py-2 mt-1`}
+            className={`${inputClass("itemNameDetails")} px-3 py-2 mt-1`}
             placeholder="Details / description (e.g., Ballpoint pen, blue ink)"
           />
         </div>
 
-        {/* HSN / Unit / GST */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-medium text-slate-600">HSN Code</label>
             <input
-              name="HSNCode"
-              value={form.HSNCode}
+              name="hsnCode"
+              value={form.hsnCode}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("hsnCode")} px-3 py-2 mt-1`}
               placeholder="e.g., 9608"
             />
           </div>
@@ -136,11 +239,11 @@ export default function ItemMaster() {
           <div>
             <label className="text-xs font-medium text-slate-600">Unit</label>
             <input
-              name="Unit"
-              value={form.Unit}
+              name="unit"
+              value={form.unit}
               onChange={handleChange}
               type="text"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("unit")} px-3 py-2 mt-1`}
               placeholder="pcs, pack"
             />
           </div>
@@ -148,30 +251,29 @@ export default function ItemMaster() {
           <div>
             <label className="text-xs font-medium text-slate-600">GST Rate (%)</label>
             <input
-              name="GSTRate"
-              value={form.GSTRate}
+              name="gstRate"
+              value={form.gstRate}
               onChange={handleChange}
               type="number"
               min="0"
               step="0.01"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("gstRate")} px-3 py-2 mt-1`}
               placeholder="e.g., 18"
             />
           </div>
         </div>
 
-        {/* Prices */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-medium text-slate-600">Purchase Price</label>
             <input
-              name="PurchasePrice"
-              value={form.PurchasePrice}
+              name="purchasePrice"
+              value={form.purchasePrice}
               onChange={handleChange}
               type="number"
               min="0"
               step="0.01"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("purchasePrice")} px-3 py-2 mt-1`}
               placeholder="Purchase price"
             />
           </div>
@@ -179,13 +281,13 @@ export default function ItemMaster() {
           <div>
             <label className="text-xs font-medium text-slate-600">Sale Price</label>
             <input
-              name="SalePrice"
-              value={form.SalePrice}
+              name="salePrice"
+              value={form.salePrice}
               onChange={handleChange}
               type="number"
               min="0"
               step="0.01"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("salePrice")} px-3 py-2 mt-1`}
               placeholder="Sale price"
             />
           </div>
@@ -193,30 +295,29 @@ export default function ItemMaster() {
           <div>
             <label className="text-xs font-medium text-slate-600">MRP</label>
             <input
-              name="MRP"
-              value={form.MRP}
+              name="mrp"
+              value={form.mrp}
               onChange={handleChange}
               type="number"
               min="0"
               step="0.01"
-              className={`${inputClass} px-3 py-2 mt-1`}
+              className={`${inputClass("mrp")} px-3 py-2 mt-1`}
               placeholder="Maximum Retail Price"
             />
           </div>
         </div>
 
-        {/* Opening Stock - Divided 6-6 in one line */}
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="text-[11px] font-semibold text-slate-600">Opening Stock</label>
             <input
-              name="OpeningStock"
-              value={form.OpeningStock}
+              name="openingStock"
+              value={form.openingStock}
               onChange={handleChange}
               type="number"
               min="0"
               step="1"
-              className={`${inputClass} px-2 py-1.5 mt-0.5`}
+              className={`${inputClass("openingStock")} px-2 py-1.5 mt-0.5`}
               placeholder="Initial stock quantity"
             />
           </div>
@@ -224,21 +325,24 @@ export default function ItemMaster() {
           <div />
         </div>
 
-        {/* Buttons - full width on mobile */}
-        <div className="pt-3 border-t flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t">
           <button
             type="submit"
-            className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold shadow hover:bg-emerald-700"
+            disabled={loading}
+            className={`flex items-center justify-center gap-2 px-6 py-2 rounded-md text-white text-sm font-semibold shadow transition-all ${
+              editId ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"
+            }`}
           >
-            <FiSave /> Save Item
+            {loading ? <FiLoader className="animate-spin" /> : <FiSave />}
+            {editId ? "UPDATE ITEM" : "SAVE ITEM"}
           </button>
 
           <button
             type="button"
             onClick={handleReset}
-            className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md text-sm shadow hover:bg-red-600"
+            className="flex items-center justify-center gap-2 bg-slate-100 text-slate-600 px-6 py-2 rounded-md text-sm hover:bg-slate-200 transition-colors"
           >
-            <FiX /> Clear
+            <FiRefreshCcw /> RESET FORM
           </button>
         </div>
       </form>

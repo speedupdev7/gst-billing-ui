@@ -2,9 +2,7 @@ import React, { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Save,
-  X,
   User,
-  ShieldCheck,
   Briefcase,
   CreditCard,
   CheckCircle,
@@ -165,8 +163,8 @@ export default function EmployeeMaster() {
             </h1>
             <p className="text-slate-500 font-medium text-sm">Add a new team member to the organization.</p>
           </div>
-          <Link to="/list" className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
-            View Directory
+          <Link to="/employee-master-list" className="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
+            View List
           </Link>
         </div>
 

@@ -1,6 +1,7 @@
 // src/components/masterslist/CustomerMasterList.jsx  (ya jahan tum rakhe ho)
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Eye,
   Edit,
@@ -10,6 +11,7 @@ import {
   FileText,
   Printer,
   Plus,
+  X,
 } from "lucide-react";
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -19,8 +21,7 @@ import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import { useToast } from "../contextapi/ToastContext";
 import { useExport } from "../contextapi/ExportContext";
 import { useActions } from "../contextapi/ActionsContext";
-
-
+import ReusableDialogueBox from "../contextapi/ReusableDialogueBox";
 
 export default function CustomerList() {
   const navigate = useNavigate();
@@ -30,105 +31,37 @@ export default function CustomerList() {
   const { onView, onEdit, onDelete } = useActions();
 
   const [query, setQuery] = useState("");
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [onlySelectedExport, setOnlySelectedExport] = useState(false);
   const [perPage] = useState(10);
   const [page, setPage] = useState(1);
+  const [customers, setCustomers] = useState([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
-  /* ---------------- SAMPLE DATA ---------------- */
-  const customers = useMemo(
-    () => [
-      {
-        id: 1,
-        CustomerName: "ABC Enterprises Pvt. Ltd.",
-        AddressLine1: "12 Marine Drive",
-        City: "Mumbai",
-        PinCode: "400020",
-        Phone: "9876543210",
-        Email: "abc@enterprises.com",
-        isActive: true,
-        isDeleted: false,
-      },
-      {
-        id: 2,
-        CustomerName: "XYZ Solutions & Services",
-        AddressLine1: "Plot 45, Kalyani Nagar",
-        City: "Pune",
-        PinCode: "411006",
-        Phone: "9988776655",
-        Email: "contact@xyzsolutions.in",
-        isActive: true,
-        isDeleted: false,
-      },
-      {
-        id: 3,
-        CustomerName: "Global Imports Co.",
-        AddressLine1: "Sector 5, Industrial Area",
-        City: "Delhi",
-        PinCode: "110075",
-        Phone: "8001122334",
-        Email: "sales@global.in",
-        isActive: true,
-        isDeleted: false,
-      },
-      {
-        id: 4,
-        CustomerName: "Tech Forward Ltd.",
-        AddressLine1: "No. 9, Park St",
-        City: "Chennai",
-        PinCode: "600001",
-        Phone: "7009988776",
-        Email: "info@techforward.com",
-        isActive: false,
-        isDeleted: false,
-      },
-      {
-        id: 5,
-        CustomerName: "Green Earth Products",
-        AddressLine1: "Bannerghatta Road",
-        City: "Bangalore",
-        PinCode: "560076",
-        Phone: "9005544332",
-        Email: "support@greenearth.org",
-        isActive: true,
-        isDeleted: false,
-      },
-      {
-        id: 6,
-        CustomerName: "Innovate Hardware",
-        AddressLine1: "MI Road",
-        City: "Jaipur",
-        PinCode: "302001",
-        Phone: "7890123456",
-        Email: "hello@innovate.co",
-        isActive: true,
-        isDeleted: false,
-      },
-      {
-        id: 7,
-        CustomerName: "Fast Finance Services",
-        AddressLine1: "Hitech City",
-        City: "Hyderabad",
-        PinCode: "500081",
-        Phone: "8765432109",
-        Email: "help@fastfin.net",
-        isActive: true,
-        isDeleted: true,
-      },
-      {
-        id: 8,
-        CustomerName: "Coastal Logistics",
-        AddressLine1: "Prinsep Ghat Road",
-        City: "Kolkata",
-        PinCode: "700021",
-        Phone: "9012345678",
-        Email: "dispatch@coastal.com",
-        isActive: false,
-        isDeleted: false,
-      },
-    ],
-    []
-  );
+  useEffect(() => {
+    axios
+      .get("/api/customer-master")
+      .then((res) => {
+        const data = Array.isArray(res.data) ? res.data : [];
+        const normalized = data.map((c) => ({
+          id: c.customerId,
+          CustomerName: c.customerName || "",
+          AddressLine1: c.billingAddress || "",
+          City: c.district || "",
+          PinCode: c.pinCode || "",
+          Phone: c.mobileNo || "",
+          Email: c.email || "",
+          isActive: c.isActive ?? true,
+          isDeleted: c.isDeleted ?? false,
+        }));
+        setCustomers(normalized);
+      })
+      .catch((err) => {
+        console.error("Customer fetch error:", err);
+        error("Failed to load customer records.");
+      });
+  }, [error]);
 
   /* ---------------- FILTER + PAGINATION ---------------- */
   const filtered = useMemo(() => {
@@ -150,29 +83,9 @@ export default function CustomerList() {
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
 
   /* ---------------- SELECT ROWS ---------------- */
-  const toggleRow = (id) =>
-    setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-
-  const toggleAll = () => {
-    const visibleIds = pageItems.map((c) => c.id);
-    const allSelected = visibleIds.every((id) => selectedRows.includes(id));
-    if (allSelected)
-      setSelectedRows((s) => s.filter((id) => !visibleIds.includes(id)));
-    else setSelectedRows((s) => Array.from(new Set([...s, ...visibleIds])));
-  };
 
   /* ---------------- EXPORT HELPERS (context based) ---------------- */
-  const getRowsForExport = (selectedOnly) => {
-    if (selectedOnly && selectedRows.length === 0) {
-      error("No customers selected for export/print.");
-      return [];
-    }
-    return selectedOnly && selectedRows.length > 0
-      ? customers.filter((c) => selectedRows.includes(c.id))
-      : customers;
-  };
+  const getRowsForExport = () => customers;
 
   const exportColumns = [
     { key: "id", header: "ID" },
@@ -186,8 +99,8 @@ export default function CustomerList() {
     { key: "isDeleted", header: "Is Deleted" },
   ];
 
-  const handleExportExcel = (selectedOnly) => {
-    const rows = getRowsForExport(selectedOnly);
+  const handleExportExcel = () => {
+    const rows = getRowsForExport();
     if (!rows.length) return;
 
     exportExcel({
@@ -198,8 +111,8 @@ export default function CustomerList() {
     });
   };
 
-  const handleExportPDF = (selectedOnly) => {
-    const rows = getRowsForExport(selectedOnly);
+  const handleExportPDF = () => {
+    const rows = getRowsForExport();
     if (!rows.length) return;
 
     exportPDF({
@@ -210,20 +123,43 @@ export default function CustomerList() {
     });
   };
 
-  const handlePrint = (selectedOnly) => {
-    const rows = getRowsForExport(selectedOnly);
+  const handlePrint = () => {
+    const rows = getRowsForExport();
     if (!rows.length) return;
 
     printTable({
-      title: `Customer List (${selectedOnly ? "Selected Only" : "All"})`,
+      title: "Customer List",
       columns: exportColumns,
       rows,
     });
   };
 
   /* ---------------- ROW ACTIONS (context) ---------------- */
+  const openDeleteModal = (customerId) => {
+    setCustomerToDelete(customerId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete) return;
+    try {
+      await axios.delete(`/api/customer-master/${customerToDelete}`);
+      setCustomers((prev) => prev.filter((cust) => cust.id !== customerToDelete));
+      setIsDeleteDialogOpen(false);
+      setCustomerToDelete(null);
+      error("Customer deleted successfully.");
+    } catch (err) {
+      console.error("Customer delete failed:", err);
+      error(err.response?.data?.message || "Failed to delete customer.");
+      setIsDeleteDialogOpen(false);
+      setCustomerToDelete(null);
+    }
+  };
+
   const handleView = (customer) => {
-    onView("Customer", customer);
+    setSelectedCustomer(customer);
+    setIsViewModalOpen(true);
+    if (onView) onView("Customer", customer);
   };
 
   const handleEdit = (customer) => {
@@ -233,7 +169,7 @@ export default function CustomerList() {
   };
 
   const handleDelete = (id) => {
-    onDelete("Customer", id);
+    openDeleteModal(id);
   };
 
   /* ---------------- RENDER ---------------- */
@@ -261,10 +197,10 @@ export default function CustomerList() {
 
           <Link
             to="/customer-master"
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow-md hover:bg-indigo-700 transition transform hover:scale-[1.02]"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 text-white rounded-sm text-xs font-semibold transition"
             title="Add Customer"
           >
-            <Plus className="w-4 h-4" /> Add Customer
+            <Plus className="w-3.5 h-3.5" /> Add Customer
           </Link>
         </div>
       </div>
@@ -276,7 +212,7 @@ export default function CustomerList() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => handleExportExcel(onlySelectedExport)}
+            onClick={handleExportExcel}
             className="px-3 py-2 flex items-center gap-2 bg-green-600 text-white rounded-lg text-sm font-medium shadow-md hover:bg-green-700 transition transform hover:scale-[1.02]"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -284,7 +220,7 @@ export default function CustomerList() {
           </button>
 
           <button
-            onClick={() => handleExportPDF(onlySelectedExport)}
+            onClick={handleExportPDF}
             className="px-3 py-2 flex items-center gap-2 bg-red-600 text-white rounded-lg text-sm font-medium shadow-md hover:bg-red-700 transition transform hover:scale-[1.02]"
           >
             <FileText className="w-4 h-4" />
@@ -292,12 +228,100 @@ export default function CustomerList() {
           </button>
 
           <button
-            onClick={() => handlePrint(onlySelectedExport)}
+            onClick={handlePrint}
             className="px-3 py-2 flex items-center gap-2 bg-slate-700 text-white rounded-lg text-sm font-medium shadow-md hover:bg-slate-800 transition transform hover:scale-[1.02]"
           >
             <Printer className="w-4 h-4" />
             <span className="hidden sm:inline">Print</span>
           </button>
+        </div>
+      </div>
+
+      <ReusableDialogueBox
+        isOpen={isDeleteDialogOpen}
+        title="Delete Customer"
+        message="Are you sure you want to delete this customer? This action cannot be undone."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setIsDeleteDialogOpen(false);
+          setCustomerToDelete(null);
+        }}
+      />
+
+      <div className={`fixed inset-0 z-[999] overflow-hidden transition-opacity duration-500 ${isViewModalOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsViewModalOpen(false)} />
+        <div className={`absolute inset-y-0 right-0 max-w-lg w-full bg-white shadow-2xl transform transition-transform duration-500 ease-in-out ${isViewModalOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <div className="h-full flex flex-col">
+            <div className="p-6 border-b bg-indigo-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-indigo-900">Customer Profile</h2>
+                <p className="text-xs text-indigo-600 mt-1">Detailed information</p>
+              </div>
+              <button onClick={() => setIsViewModalOpen(false)} className="p-2 hover:bg-white rounded-full transition">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8">
+              <div className="space-y-8">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Customer ID</p>
+                  <p className="text-sm font-mono text-slate-700">{selectedCustomer?.id || "N/A"}</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl uppercase">
+                    {selectedCustomer?.CustomerName?.charAt(0) || "C"}
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 uppercase">{selectedCustomer?.CustomerName || "Unnamed Customer"}</h3>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Address</p>
+                    <p className="text-sm text-slate-700">{selectedCustomer?.AddressLine1 || "-"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">City</p>
+                    <p className="text-sm text-slate-700">{selectedCustomer?.City || "-"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Pin Code</p>
+                    <p className="text-sm text-slate-700">{selectedCustomer?.PinCode || "-"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Active Status</p>
+                    <p className={`text-sm font-semibold ${selectedCustomer?.isActive ? "text-emerald-600" : "text-slate-500"}`}>
+                      {selectedCustomer?.isActive ? "Active" : "Inactive"}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Phone</p>
+                    <p className="text-sm text-slate-700">{selectedCustomer?.Phone || "-"}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Email</p>
+                    <p className="text-sm text-slate-700">{selectedCustomer?.Email || "-"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex gap-3">
+              <button
+                onClick={() => navigate(`/customer-master?id=${selectedCustomer?.id}`)}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-md"
+              >
+                Edit Customer
+              </button>
+              <button
+                onClick={() => setIsViewModalOpen(false)}
+                className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -307,20 +331,7 @@ export default function CustomerList() {
         <table className="min-w-full text-sm table-auto hidden md:table">
           <thead className="bg-blue-900 sticky top-0 border-b border-indigo-200">
             <tr className="text-white text-left">
-              <th className="px-4 py-3 w-10">
-                <input
-                  type="checkbox"
-                  checked={
-                    pageItems.length > 0 &&
-                    pageItems.every((c) => selectedRows.includes(c.id))
-                  }
-                  onChange={toggleAll}
-                  className="w-4 h-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500"
-                />
-              </th>
-              <th className="px-4 py-3">ID</th>
-              
-              {/* MOVED ACTIONS HEADER HERE */}
+<th className="px-4 py-3">ID</th>
               <th className="px-4 py-3 text-center w-28 border-x border-gray-700">Actions</th>
               
               <th className="px-4 py-3">Customer Name</th>
@@ -337,7 +348,7 @@ export default function CustomerList() {
             {pageItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan="11" /* Increased colSpan to account for the new column order */
+                  colSpan="9"
                   className="text-center py-8 text-slate-500 italic"
                 >
                   No customer records found.
@@ -345,41 +356,29 @@ export default function CustomerList() {
               </tr>
             ) : (
               pageItems.map((c) => {
-                const selected = selectedRows.includes(c.id);
                 return (
                   <tr
                     key={c.id}
-                    className={`border-b border-slate-100 transition ${
-                      selected ? "bg-indigo-100/50" : "hover:bg-slate-50"
-                    }`}
+                    className="border-b border-slate-100 transition hover:bg-slate-50"
                   >
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleRow(c.id)}
-                        className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                      />
-                    </td>
-
                     <td className="px-4 py-3 font-mono text-slate-700">
                       {c.id}
                     </td>
 
                     {/* MOVED ACTIONS CELL HERE */}
                     <td className="px-4 py-3 text-center border-r border-slate-50">
-                  <div className="flex items-center justify-center gap-1">
-                    <button onClick={() => handleView(c)} className="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition" title="View">
-                      <VisibilityIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button onClick={() => handleEdit(c)} className="p-2 rounded-full hover:bg-sky-100 text-sky-600 transition" title="Edit">
-                      <ModeEditIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="p-2 rounded-full hover:bg-rose-100 text-rose-600 transition" title="Delete">
-                      <DeleteIcon sx={{ fontSize: 18 }} />
-                    </button>
-                  </div>
-                </td>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleView(c)} className="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition" title="View">
+                          <VisibilityIcon sx={{ fontSize: 18 }} />
+                        </button>
+                        <button onClick={() => handleEdit(c)} className="p-2 rounded-full hover:bg-sky-100 text-sky-600 transition" title="Edit">
+                          <ModeEditIcon sx={{ fontSize: 18 }} />
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} className="p-2 rounded-full hover:bg-rose-100 text-rose-600 transition" title="Delete">
+                          <DeleteIcon sx={{ fontSize: 18 }} />
+                        </button>
+                      </div>
+                    </td>
 
                     <td className="px-4 py-3 font-medium text-slate-700">
                       {c.CustomerName}
@@ -416,38 +415,27 @@ export default function CustomerList() {
 
         {/* Mobile card view (Actions kept at bottom for better thumb reach) */}
         <div className="md:hidden p-4 space-y-4">
-          {pageItems.map((c) => {
-            const selected = selectedRows.includes(c.id);
-            return (
-              <div
-                key={c.id}
-                className={`border rounded-xl p-4 shadow-md transition ${
-                  selected ? "bg-indigo-50 border-indigo-300" : "bg-white border-slate-200"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2">
-                       <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-500">#{c.id}</span>
-                       <div className="font-semibold text-indigo-700 truncate">{c.CustomerName}</div>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">{c.City} - {c.PinCode}</div>
+          {pageItems.map((c) => (
+            <div
+              key={c.id}
+              className="border rounded-xl p-4 shadow-md transition bg-white border-slate-200"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-500">#{c.id}</span>
+                    <div className="font-semibold text-indigo-700 truncate">{c.CustomerName}</div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleRow(c.id)}
-                    className="w-5 h-5 text-indigo-600 rounded border-slate-300"
-                  />
-                </div>
-                <div className="flex justify-end gap-3 mt-4 pt-3 border-t">
-                  <button onClick={() => handleView(c)} className="p-2 bg-slate-50 rounded-full text-indigo-600"><Eye size={18} /></button>
-                  <button onClick={() => handleEdit(c)} className="p-2 bg-slate-50 rounded-full text-sky-600"><Edit size={18} /></button>
-                  <button onClick={() => handleDelete(c.id)} className="p-2 bg-slate-50 rounded-full text-rose-600"><Trash2 size={18} /></button>
+                  <div className="text-xs text-slate-500 mt-1">{c.City} - {c.PinCode}</div>
                 </div>
               </div>
-            );
-          })}
+              <div className="flex justify-end gap-3 mt-4 pt-3 border-t">
+                <button onClick={() => handleView(c)} className="p-2 bg-slate-50 rounded-full text-indigo-600"><Eye size={18} /></button>
+                <button onClick={() => handleEdit(c)} className="p-2 bg-slate-50 rounded-full text-sky-600"><Edit size={18} /></button>
+                <button onClick={() => handleDelete(c.id)} className="p-2 bg-slate-50 rounded-full text-rose-600"><Trash2 size={18} /></button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       {/* Footer / Pagination */}
