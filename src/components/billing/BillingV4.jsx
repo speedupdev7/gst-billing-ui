@@ -344,7 +344,15 @@ const BillingV4 = () => {
             </div>
           </div>
 
-          
+          {/* 4. Extra Field / Settings (3/12) to fill the row */}
+          {/* <div className="col-span-12 md:col-span-3 p-4 border-b border-amber-200/50">
+            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Reference</label>
+            <input
+              type="text"
+              className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm"
+              placeholder="Optional"
+            />
+          </div> */}
         </div>
         {/* CUSTOMER SECTION */}
         <div className="border-t border-amber-200">
@@ -1029,7 +1037,7 @@ const BillingV4 = () => {
                               </div>
                             </div>
 
-                            <div className="w-full sm:w-[150px] lg:w-[180px]">
+                            <div className="w-full sm:w-[150px] lg:w-[100px]">
                               <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block ml-1">
                                 {isDiscount ? 'Mode' : needsRef ? 'Reference' : 'Note'}
                               </label>
