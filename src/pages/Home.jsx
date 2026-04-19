@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import heroImage from "../assets/homePageImage.png";
-import Leaves from "../assets/Leaves.png";
+
 
 const getGreeting = () => {
   const hr = new Date().getHours();

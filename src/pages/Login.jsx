@@ -1,127 +1,143 @@
-import React, { useState } from 'react';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
-import logoImage from "../assets/logoImage.png";
-import LoginImage from "../assets/LoginImage.png";
-
+import React, { useState } from "react";
+import { HiOutlineEye, HiOutlineEyeOff } from "react-icons/hi";
+import { RiCloudLine } from "react-icons/ri";
+import LoginIllustration from "../assets/LoginBackground.png";
+import logoimage from "../assets/logoimage.png";
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [passcode, setPasscode] = useState(new Array(8).fill(""));
+
+  const handleChange = (val, i) => {
+    if (isNaN(val)) return;
+    const newCode = [...passcode];
+    newCode[i] = val.slice(-1);
+    setPasscode(newCode);
+
+    if (val && i < 7) {
+      document.getElementById(`pin-${i + 1}`).focus();
+    }
+  };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center relative font-poppins bg-[#0F172A] overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#f0f9ff]">
 
-      {/* BACKGROUND LAYERS */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E40AF] to-[#3B82F6]" />
-        <div className="absolute top-[10%] left-[5%] w-72 h-72 bg-white/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-[-5%] right-[10%] w-96 h-96 bg-blue-400/10 rounded-full blur-3xl" />
-        <div
-          className="absolute inset-0 opacity-[0.09]"
-          style={{
-            backgroundImage: `radial-gradient(circle, #ffffff 1px, transparent 2px)`,
-            backgroundSize: "40px 40px",
-          }}
-        />
+      {/* --- BACKGROUND UI --- */}
+
+      {/* 1. Primary Mesh Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#94a3b8] via-[#f8faff] to-[#0ea5e9]" />
+
+      {/* 2. Main Professional Dotted Grid */}
+      <div className="absolute inset-0 z-0 opacity-[0.4]"
+        style={{
+          backgroundImage: `radial-gradient(#0891b2 0.7px, transparent 0.6px)`,
+          backgroundSize: '30px 30px'
+        }}
+      />
+
+      {/* 3. NEW: BOTTOM DOTTED DESIGN (Decent & Structured) */}
+      <div className="absolute bottom-0 left-0 w-full h-64 opacity-30 pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(#0f172a 1px, transparent 1px)`,
+          backgroundSize: '20px 20px',
+          maskImage: 'linear-gradient(to top, black, transparent)' // Fades out as it goes up
+        }}
+      />
+
+      {/* 4. Vertical Dotted Accents at Bottom Corners */}
+      <div className="absolute bottom-10 right-10 hidden lg:block opacity-20">
+        <div className="grid grid-cols-2 gap-4">
+          {[...Array(10)].map((_, i) => (
+            <div key={i} className="w-1.5 h-1.5 bg-slate-900 rounded-full" />
+          ))}
+        </div>
       </div>
 
-      {/* MAIN CONTAINER */}
-      <div className="relative z-10 w-full max-w-[1200px] grid lg:grid-cols-2 gap-8 xl:gap-12 px-6 items-center">
+      {/* 5. Floating Glassmorphism Orbs */}
+      <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-cyan-200/30 blur-[120px] rounded-full animate-pulse" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[30%] h-[30%] bg-indigo-200/30 blur-[100px] rounded-full" />
 
-        {/* LEFT AREA — BRANDING + IMAGE */}
-        <div className="hidden lg:flex flex-col text-white">
+      {/* --- MAIN CONTENT --- */}
+      <div className="relative z-10 flex flex-col lg:flex-row w-full max-w-7xl items-center justify-between px-6 sm:px-10 gap-12">
 
-          {/* Logo */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="w-20 h-20  flex items-center justify-center p-2">
-              <img src={logoImage} alt="Logo" className="w-full h-full object-contain invert" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">
-                ACTIVE<span className="text-orange-400">Cloud</span>
+        <div className="hidden md:flex w-full lg:w-[60%] items-center justify-center">
+          <div className="relative w-full flex justify-center">
+
+            <div className="absolute inset-0 bg-blue-900/20 blur-[50px] rounded-full scale-40" />
+
+            <img
+              src={LoginIllustration}
+              alt="illustration"
+              className="relative z-10 w-full 
+                 max-w-[550px] 
+                 md:max-w-[700px] 
+                 lg:max-w-none 
+                 lg:w-[900px] 
+                 xl:w-[900px] 
+                 2xl:w-[1300px] 
+                 h-auto object-contain 
+                 drop-shadow-[0_20px_60px_rgba(8,145,170,0.25)]"
+            />
+          </div>
+        </div>
+
+        {/* LOGIN CARD SIDE */}
+        <div className="w-full max-w-sm flex justify-center lg:justify-end">
+          <div className="w-full bg-white/80 backdrop-blur-sm rounded-2xl p-6 sm:p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/60">
+
+            {/* LOGO */}
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-14 h-14 flex items-center justify-center mb-3">
+                <div className="relative">
+                  <img src={logoimage} alt="Logo" />
+                  <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-orange-400 rounded-full border-2 border-white" />
+                </div>
+              </div>
+              <h1 className="text-lg font-black text-slate-800 text-center tracking-tight">
+                GST Billing
               </h1>
             </div>
-          </div>
 
-          {/* 3D Illustration — RESIZED + FLOATING */}
-          <div className="relative">
-            <img
-              src={LoginImage}
-              alt="GST Illustration"
-              className="w-[420px] xl:w-[480px] drop-shadow-[0_40px_80px_rgba(0,0,0,0.45)]"
-            />
-            <div className="absolute -z-10 inset-0 bg-blue-500/20 blur-3xl"></div>
-          </div>
+            {/* FORM */}
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Username"
+                className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm outline-none focus:border-cyan-500 focus:bg-white transition-all shadow-sm"
+              />
 
-        </div>
-
-        {/* RIGHT AREA — LOGIN FORM */}
-        <div className="flex flex-col items-center lg:items-end w-full">
-
-          {/* CARD */}
-          <div className="w-full max-w-[460px] bg-white rounded-[3rem] shadow-[0_40px_100px_rgba(0,0,0,0.4)] p-8 md:p-10 border border-white/30 relative">
-
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-
-            <div className="text-center mb-8">
-              <div className="lg:hidden flex justify-center mb-4">
-                <img src={logoImage} alt="Logo" className="w-12 h-12 object-contain" />
-              </div>
-              <h3 className="text-2xl font-black text-slate-800 tracking-tight font-poppins">System Login</h3>
-              <p className="text-slate-400 text-[13px] mt-1 font-medium font-poppins">Secure Administrative Access</p>
-            </div>
-
-            <form className="space-y-6">
-              <div className="relative border-b border-slate-200 focus-within:border-blue-500 transition-colors py-2">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-poppins font-semibold block mb-1">User Identity</span>
-                <div className="flex items-center gap-3">
-                  <FiMail className="text-slate-300" />
-                  <input
-                    type="email"
-                    placeholder="Enter your email"
-                    className="w-full bg-transparent border-none outline-none text-sm text-slate-700 placeholder:text-slate-300"
-                  />
-                </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm outline-none focus:border-cyan-500 focus:bg-white transition-all shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-cyan-600"
+                >
+                  {showPassword ? <HiOutlineEyeOff size={18} /> : <HiOutlineEye size={18} />}
+                </button>
               </div>
 
-              <div className="relative border-b border-slate-200 focus-within:border-blue-500 transition-colors py-2">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-poppins font-semibold block mb-1">Security Key</span>
-                <div className="flex items-center gap-3">
-                  <FiLock className="text-slate-300" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter password"
-                    className="w-full bg-transparent border-none outline-none text-sm text-slate-700 placeholder:text-slate-300"
-                  />
-                </div>
+              <div className="text-right text-[11px] text-cyan-600 cursor-pointer font-bold uppercase tracking-tighter hover:underline">
+                Forgot Password?
               </div>
 
-              {/* LOGIN BUTTON */}
-              <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-poppins
-    py-3 rounded-xl mt-14 shadow-md shadow-blue-500/20
-    hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] 
-    transition-all duration-200
-    flex items-center justify-center gap-2 mt-2"
-              >
-                <span className="text-sm">Sign in </span>
-                <FiArrowRight size={16} className="mt-0.5" />
+              <button className="w-full mt-4 py-3.5 bg-[#4c5bb4] hover:bg-[#3f4b94] text-white rounded-sm font-bold shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] uppercase text-[11px] tracking-[0.15em]">
+                Login
               </button>
-            </form>
-            {/* FOOTER TEXT */}
-            <div className="mt-10 relative">
-
-
             </div>
           </div>
-
-          {/* COPYRIGHT */}
-          <div className="mt-8 text-center lg:text-right pr-4">
-            <p className="text-white text-[9px] uppercase tracking-[0.4em] font-xl mb-1">
-              © 2026 ABC Cloud Services
-            </p>
-            <div className="h-1 w-1 rounded-full bg-blue-400 inline-block animate-pulse"></div>
-          </div>
         </div>
+      </div>
+
+      {/* FOOTER */}
+      <div className="absolute bottom-6 w-full text-center ">
+        <p className="text-black text-[10px] font-semibold uppercase tracking-[0.3em] leading-relaxed md:m-8">
+          Designed And Developed By AC Pvt. Ltd. <br />
+          <span className="opacity-70">Copyright © 2026 All Rights Reserved</span>
+        </p>
       </div>
     </div>
   );
