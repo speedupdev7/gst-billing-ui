@@ -21,11 +21,6 @@ const Home = () => {
     <div className="relative overflow-hidden">
       
       {/* LEAVES IMAGE: Now positioned on the LEFT side */}
-      {/* <img
-        src={Leaves}
-        alt="Leaves Decoration"
-        className="absolute top-0 left-0 w-[250px] md:w-[450px] opacity-10 pointer-events-none z-0 -scale-x-100"
-      /> */}
 
       {/* MAIN LAYOUT - Unchanged UI */}
       <main className="relative z-10 flex w-full h-[600px] md:h-screen lg:h-[450px] flex-col lg:flex-row">
