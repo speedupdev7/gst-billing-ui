@@ -10,6 +10,7 @@ import DashboardImage from "../assets/DashboardImage.png";
 import MastersImage from "../assets/MastersImage.png";
 import PurchaseImage from "../assets/PurchaseImage.png";
 import BillingImage from "../assets/billingImage.png";
+import BillingReturnImage from "../assets/billingReturn.png";
 import TransactionImage from "../assets/TransactionImage.png";
 import ExpensesImage from "../assets/ExpensesImage.png";
 import ReportsImage from "../assets/ReportsImage.png";
@@ -27,6 +28,7 @@ const ICON_MAP = {
   reports: ReportsImage,
   setting: SettingImage,
   assign: AssignFunctionalityImage,
+  billingreturn: BillingReturnImage,
 };
 
 const initialMenu = [
@@ -82,7 +84,15 @@ const initialMenu = [
       { key: "billing_v2", title: "Billing V2", path: "/billing_v2" },
       { key: "billing_v3", title: "Billing V3", path: "/billing_v3" },
       { key: "billing_v4", title: "Billing V4", path: "/billing_v4" },
-      { key: "return-billing", title: "Billing Return", path: "/return-billing" },
+    ],
+
+  },
+  {
+    key: "billingreturn",
+    title: "Billing Return",
+    icon: "billingreturn",
+    children: [
+      { key: "return-billing-v4", title: "Billing Return V4", path: "/billing-return-v4" },
     ],
   },
   {
@@ -310,16 +320,16 @@ const DashboardLayout = () => {
   };
 
   const CompanyBranding = () => (
-  <div className="flex items-center gap-3 animate-in fade-in duration-500">
-    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black">
-      <img src={logoImage} alt="logo" className="w-full h-full object-contain" />
+    <div className="flex items-center gap-3 animate-in fade-in duration-500">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black">
+        <img src={logoImage} alt="logo" className="w-full h-full object-contain" />
+      </div>
+      {/* text-white ensures it shows on the blue/dark navbar when the drawer is closed */}
+      <span className="text-xl font-black tracking-tighter uppercase font-poppins text-white">
+        ABC<span className="text-orange-500">123</span>
+      </span>
     </div>
-    {/* text-white ensures it shows on the blue/dark navbar when the drawer is closed */}
-    <span className="text-xl font-black tracking-tighter uppercase font-poppins text-white">
-      ABC<span className="text-orange-500">123</span>
-    </span>
-  </div>
-);
+  );
 
   return (
     <div className="flex h-screen bg-[#F0F2F5] text-slate-800 font-poppins">
@@ -376,13 +386,13 @@ const DashboardLayout = () => {
         </nav>
 
         <div className="lg:hidden mt-auto border-t border-slate-100 p-3">
-            <button 
-                onClick={() => navigate("/login")}
-                className={`flex items-center gap-4 w-full px-3 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition-all ${!open ? 'justify-center' : ''}`}
-            >
-                <FiLogOut size={20} className="shrink-0" />
-                {open && <span className="text-[13px] font-black uppercase tracking-widest">Log Out</span>}
-            </button>
+          <button
+            onClick={() => navigate("/login")}
+            className={`flex items-center gap-4 w-full px-3 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition-all ${!open ? 'justify-center' : ''}`}
+          >
+            <FiLogOut size={20} className="shrink-0" />
+            {open && <span className="text-[13px] font-black uppercase tracking-widest">Log Out</span>}
+          </button>
         </div>
       </aside>
 
@@ -401,10 +411,10 @@ const DashboardLayout = () => {
             {/* Page title section removed from here */}
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 ">
             <div className="hidden sm:flex items-center gap-3 text-right">
               <div className="flex flex-col items-end">
-                <span className="text-[10px] text-white uppercase font-black">Date</span>
+                <span className="text-[10px] text-white uppercase font-black ">Date</span>
                 <span className="text-sm font-semibold text-white">{currentDate}</span>
               </div>
               <div className="h-8 w-px bg-white/10" />
@@ -456,14 +466,14 @@ const DashboardLayout = () => {
             </div>
 
             <div className="lg:hidden text-white p-2">
-                <FiBell size={20} />
+              <FiBell size={20} />
             </div>
           </div>
         </header>
 
         <main className="flex-1 p-6 bg-[#F0F2F5] overflow-y-auto">
           <div className="max-w-[1800px] mx-auto min-h-full">
-            <Outlet/>
+            <Outlet />
           </div>
         </main>
       </div>

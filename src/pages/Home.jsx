@@ -23,7 +23,7 @@ const Home = () => {
       {/* LEAVES IMAGE: Now positioned on the LEFT side */}
 
       {/* MAIN LAYOUT - Unchanged UI */}
-      <main className="relative z-10 flex w-full h-[600px] md:h-screen lg:h-[450px] flex-col lg:flex-row">
+      <main className="relative z-10 flex w-full h-[600px] md:h-screen lg:h-[450px] flex-col lg:flex-row font-poppins">
         {/* LEFT IMAGE (changes by tab) */}
         <div className="w-full lg:w-1/2 flex justify-center items-center order-1 lg:order-2">
           <img
