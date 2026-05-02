@@ -24,7 +24,7 @@ const BillingV4 = () => {
   const [narration, setNarration] = useState('');
   // from MultiTransaction Context
   const { showPaymentModal, setShowPaymentModal } = usePayment();
-
+  const [activeRowIndex, setActiveRowIndex] = useState(null);
   const createEmptyRow = () => ({
     id: Date.now() + Math.random(),
     itemId: null,
@@ -251,6 +251,8 @@ const BillingV4 = () => {
   const removeRow = (id) => { if (items.length > 1) setItems(calculateTotals(items.filter(item => item.id !== id))); };
   const handleKeyDown = (e, index) => { if (e.key === 'Tab' && !e.shiftKey && index === items.length - 1) addNewRow(); };
 
+
+
   return (
     <div className="min-h-screen p-2 sm:p-4 md:p-3 text-[12px] font-poppins text-slate-700">
       <div className="max-w-[1500px] mx-auto bg-white  rounded-xl overflow-hidden border border-slate-200">
@@ -334,15 +336,6 @@ const BillingV4 = () => {
             </div>
           </div>
 
-          {/* 4. Extra Field / Settings (3/12) to fill the row */}
-          {/* <div className="col-span-12 md:col-span-3 p-4 border-b border-amber-200/50">
-            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Reference</label>
-            <input
-              type="text"
-              className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm"
-              placeholder="Optional"
-            />
-          </div> */}
           <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50 bg-white/40">
             <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Search Original Inv</label>
             <div className="relative">
@@ -536,10 +529,10 @@ const BillingV4 = () => {
                     <td className="p-3 text-center text-slate-400 font-medium text-[11px] border-r border-slate-50">{idx + 1}</td>
 
                     {/* Item Name */}
-                    <td className="p-1 border-r border-slate-50">
-                      <div className="relative">
+                    <td className="p-1 border-r border-slate-100">
+                      <div className="relative group">
                         <input
-                          className="w-full bg-transparent border-none focus:ring-2 focus:ring-blue-500/10 rounded px-1 py-1 text-[14px] text-slate-700 placeholder:text-slate-300 transition-all outline-none font-medium"
+                          className="w-full bg-transparent border-none focus:ring-2 focus:ring-blue-500/20 rounded px-2 py-1.5 text-[14px] text-slate-700 placeholder:text-slate-300 transition-all outline-none font-medium hover:bg-slate-50/50"
                           type="text"
                           value={item.itemName}
                           onChange={(e) => {
@@ -547,22 +540,43 @@ const BillingV4 = () => {
                             setItemSearch(e.target.value);
                             searchItems(e.target.value);
                           }}
-                          onFocus={() => itemSuggestions.length > 0 && setShowItemDropdown(true)}
-                          onBlur={() => setTimeout(() => setShowItemDropdown(false), 200)}
-                          placeholder="Item description..."
+                          onFocus={() => {
+                            setActiveRowIndex(idx);
+                            if (itemSuggestions.length > 0) setShowItemDropdown(true);
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => {
+                              setShowItemDropdown(false);
+                              setActiveRowIndex(null);
+                            }, 200);
+                          }}
+                          placeholder="Search or enter item..."
                         />
-                        {showItemDropdown && itemSuggestions.length > 0 && (
-                          <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-1">
-                            {itemSuggestions.map((suggestion, sIndex) => (
-                              <div
-                                key={sIndex}
-                                className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-b-0"
-                                onClick={() => selectItem(idx, suggestion)}
-                              >
-                                <div className="font-bold">{suggestion.itemName}</div>
-                                <div className="text-sm text-slate-500">Code: {suggestion.itemCode} | HSN: {suggestion.hsnCode}</div>
-                              </div>
-                            ))}
+
+                        {/* Stylish Dropdown */}
+                        {showItemDropdown && activeRowIndex === idx && itemSuggestions.length > 0 && (
+                          <div className="absolute z-[100] left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-2xl shadow-blue-900/10 overflow-hidden animate-in fade-in zoom-in duration-150 origin-top">
+                            <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
+                              {itemSuggestions.map((suggestion, sIndex) => (
+                                <div
+                                  key={sIndex}
+                                  className="px-4 py-3 hover:bg-blue-600 group/item cursor-pointer border-b border-slate-50 last:border-b-0 transition-colors"
+                                  onClick={() => selectItem(idx, suggestion)}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <div className="font-semibold text-slate-700 group-hover/item:text-white transition-colors">
+                                      {suggestion.itemName}
+                                    </div>
+                                    <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 group-hover/item:bg-blue-400 group-hover/item:text-white">
+                                      {suggestion.itemCode}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-slate-400 group-hover/item:text-blue-100 mt-0.5">
+                                    HSN: {suggestion.hsnCode} 
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
