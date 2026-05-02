@@ -24,15 +24,15 @@ const BillingV4 = () => {
   const [narration, setNarration] = useState('');
 //  HEAD
   // from MultiTransaction Context
-  const { showPaymentModal, setShowPaymentModal } = usePayment();
+  const {
+    activeMethods,
+    paymentSplit,
+    paymentRefs,
+    discountMode,
+    showPaymentModal,
+    setShowPaymentModal
+  } = usePayment();
   const [activeRowIndex, setActiveRowIndex] = useState(null);
-
-  // Each entry in activeMethods will look like: { id: 'UPI-171234', type: 'UPI' }
-  const [activeMethods, setActiveMethods] = useState([{ type: 'Cash', id: 'initial-cash' }]);
-  const [paymentSplit, setPaymentSplit] = useState({});
-  // const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentRefs, setPaymentRefs] = useState({}); // Stores { [methodId]: 'REF123' }
-  const [discountMode, setDiscountMode] = useState({}); // Stores { [method.id]: 'rupee' | 'percent' }
   
   // Save & Print state
   const [isLoadingPrint, setIsLoadingPrint] = useState(false);
