@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, Printer, Mail, Send, Truck, XCircle, Plus, Trash2, MapPin, FileText, Search, Hash, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import { usePayment } from "../contextapi/PaymentContext";
@@ -16,6 +17,8 @@ const BillingV4 = () => {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const itemInputRefs = useRef({});
+  const [dropdownCoords, setDropdownCoords] = useState(null);
   const [invoiceNo, setInvoiceNo] = useState('');
   const [placeOfSupply, setPlaceOfSupply] = useState('Maharashtra');
   const [reverseCharge, setReverseCharge] = useState(false);
@@ -163,6 +166,7 @@ const BillingV4 = () => {
   const searchItems = async (query) => {
     if (query.length < 3) {
       setItemSuggestions([]);
+      setShowItemDropdown(false);
       return;
     }
     try {
@@ -172,8 +176,35 @@ const BillingV4 = () => {
     } catch (error) {
       console.error('Error searching items:', error);
       setItemSuggestions([]);
+      setShowItemDropdown(false);
     }
   };
+
+  const updateItemDropdownPosition = useCallback((idx) => {
+    const input = itemInputRefs.current[idx];
+    if (!input) return;
+    const rect = input.getBoundingClientRect();
+    setDropdownCoords({
+      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showItemDropdown || activeRowIndex === null) {
+      setDropdownCoords(null);
+      return;
+    }
+    updateItemDropdownPosition(activeRowIndex);
+    const handleResize = () => updateItemDropdownPosition(activeRowIndex);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleResize, true);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleResize, true);
+    };
+  }, [showItemDropdown, activeRowIndex, itemSuggestions.length, updateItemDropdownPosition]);
 
   const selectCustomer = (customer) => {
     setSelectedCustomer(customer);
@@ -712,9 +743,10 @@ const BillingV4 = () => {
                     <td className="p-3 text-center text-slate-400 font-medium text-[11px] border-r border-slate-50">{idx + 1}</td>
 
                     {/* Item Name */}
-                    <td className="p-1 border-r border-slate-100">
-                      <div className="relative group">
+                    <td className="p-1 border-r border-slate-100 overflow-visible">
+                      <div className="relative group overflow-visible">
                         <input
+                          ref={(el) => { itemInputRefs.current[idx] = el; }}
                           className="w-full bg-transparent border-none focus:ring-2 focus:ring-blue-500/20 rounded px-2 py-1.5 text-[14px] text-slate-700 placeholder:text-slate-300 transition-all outline-none font-medium hover:bg-slate-50/50"
                           type="text"
                           value={item.itemName}
@@ -722,10 +754,12 @@ const BillingV4 = () => {
                             handleItemChange(idx, 'itemName', e.target.value);
                             setItemSearch(e.target.value);
                             searchItems(e.target.value);
+                            updateItemDropdownPosition(idx);
                           }}
                           onFocus={() => {
                             setActiveRowIndex(idx);
                             if (itemSuggestions.length > 0) setShowItemDropdown(true);
+                            updateItemDropdownPosition(idx);
                           }}
                           onBlur={() => {
                             setTimeout(() => {
@@ -735,33 +769,6 @@ const BillingV4 = () => {
                           }}
                           placeholder="Search or enter item..."
                         />
-
-                        {/* Stylish Dropdown */}
-                        {showItemDropdown && activeRowIndex === idx && itemSuggestions.length > 0 && (
-                          <div className="absolute z-[100] left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-2xl shadow-blue-900/10 overflow-hidden animate-in fade-in zoom-in duration-150 origin-top">
-                            <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
-                              {itemSuggestions.map((suggestion, sIndex) => (
-                                <div
-                                  key={sIndex}
-                                  className="px-4 py-3 hover:bg-blue-600 group/item cursor-pointer border-b border-slate-50 last:border-b-0 transition-colors"
-                                  onClick={() => selectItem(idx, suggestion)}
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <div className="font-semibold text-slate-700 group-hover/item:text-white transition-colors">
-                                      {suggestion.itemName}
-                                    </div>
-                                    <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 group-hover/item:bg-blue-400 group-hover/item:text-white">
-                                      {suggestion.itemCode}
-                                    </span>
-                                  </div>
-                                  <div className="text-xs text-slate-400 group-hover/item:text-blue-100 mt-0.5">
-                                    HSN: {suggestion.hsnCode} 
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </td>
 
@@ -935,6 +942,42 @@ const BillingV4 = () => {
             </tbody>
           </table>
         </div>
+        {showItemDropdown && activeRowIndex !== null && itemSuggestions.length > 0 && dropdownCoords && typeof document !== 'undefined' && createPortal(
+          <div
+            style={{
+              position: 'absolute',
+              top: dropdownCoords.top,
+              left: dropdownCoords.left,
+              width: dropdownCoords.width,
+              zIndex: 99999
+            }}
+          >
+            <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-2xl shadow-blue-900/10 overflow-hidden animate-in fade-in zoom-in duration-150 origin-top pointer-events-auto">
+              <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
+                {itemSuggestions.map((suggestion, sIndex) => (
+                  <div
+                    key={sIndex}
+                    className="px-4 py-3 hover:bg-blue-600 group/item cursor-pointer border-b border-slate-50 last:border-b-0 transition-colors"
+                    onMouseDown={() => selectItem(activeRowIndex, suggestion)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="font-semibold text-slate-700 group-hover/item:text-white transition-colors">
+                        {suggestion.itemName}
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 group-hover/item:bg-blue-400 group-hover/item:text-white">
+                        {suggestion.itemCode}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400 group-hover/item:text-blue-100 mt-0.5">
+                      HSN: {suggestion.hsnCode}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
         {/* SUMMARY FOOTER - FULL WIDTH REFINED */}
         <div className="grid grid-cols-12 border-t border-slate-200 w-full bg-white">
 
