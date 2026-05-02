@@ -35,7 +35,7 @@ const BillingV4 = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentRefs, setPaymentRefs] = useState({}); // Stores { [methodId]: 'REF123' }
   const [discountMode, setDiscountMode] = useState({}); // Stores { [method.id]: 'rupee' | 'percent' }
-
+  
   // Save & Print state
   const [isLoadingPrint, setIsLoadingPrint] = useState(false);
   const [printError, setPrintError] = useState(null);
