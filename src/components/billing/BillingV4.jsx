@@ -192,7 +192,8 @@ const BillingV4 = () => {
       hsn: item.hsnCode,
       gstP: item.gstRate,
       rate: item.salePrice,
-      batch: updatedItems[index].batch || 'BATCH01' // keep existing batch if set
+      batch: item.batchCode || updatedItems[index].batch || 'BATCH01', // use API batchCode first
+      itemUnit: item.unit // map unit from API
     };
     setItems(calculateTotals(updatedItems));
     setItemSearch('');
