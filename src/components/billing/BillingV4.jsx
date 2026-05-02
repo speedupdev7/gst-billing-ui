@@ -22,9 +22,67 @@ const BillingV4 = () => {
   const [transporterName, setTransporterName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [narration, setNarration] = useState('');
+//  HEAD
   // from MultiTransaction Context
   const { showPaymentModal, setShowPaymentModal } = usePayment();
   const [activeRowIndex, setActiveRowIndex] = useState(null);
+
+  // Each entry in activeMethods will look like: { id: 'UPI-171234', type: 'UPI' }
+  const [activeMethods, setActiveMethods] = useState([{ type: 'Cash', id: 'initial-cash' }]);
+  const [paymentSplit, setPaymentSplit] = useState({});
+  // const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentRefs, setPaymentRefs] = useState({}); // Stores { [methodId]: 'REF123' }
+  const [discountMode, setDiscountMode] = useState({}); // Stores { [method.id]: 'rupee' | 'percent' }
+  
+  // Save & Print state
+  const [isLoadingPrint, setIsLoadingPrint] = useState(false);
+  const [printError, setPrintError] = useState(null);
+
+  const getPaymentAmount = (method) => {
+    const rawValue = parseFloat(paymentSplit[method.id] || 0) || 0;
+    if (method.type === 'Discount') {
+      const mode = discountMode[method.id] || 'rupee';
+      return mode === 'percent'
+        ? parseFloat(((totals.invoiceTotal * rawValue) / 100).toFixed(2))
+        : rawValue;
+    }
+    return rawValue;
+  };
+
+  const buildPaymentsPayload = () => {
+    const methods = activeMethods.map((method) => {
+      const amount = getPaymentAmount(method);
+      if (!amount || amount <= 0) return null;
+
+      const normalizedMode = {
+        Cash: 'CASH',
+        UPI: 'UPI',
+        'Credit Card': 'CREDIT_CARD',
+        'Debit Card': 'DEBIT_CARD',
+        Cheque: 'CHEQUE',
+        Discount: 'DISCOUNT'
+      }[method.type] || method.type;
+
+      const needsRef = ['UPI', 'CHEQUE', 'CREDIT_CARD', 'DEBIT_CARD'].includes(normalizedMode);
+      const paymentRecord = {
+        paymentMode: normalizedMode,
+        amount: parseFloat(amount.toFixed(2)),
+        referenceNo: needsRef ? paymentRefs[method.id] || null : null,
+        paymentDate: invoiceDate.toISOString().split('T')[0],
+        methodId: method.id
+      };
+
+      if (method.type === 'Discount') {
+        paymentRecord.discountMode = discountMode[method.id] || 'rupee';
+      }
+
+      return paymentRecord;
+    });
+
+    return methods.filter(Boolean);
+  };
+
+
   const createEmptyRow = () => ({
     id: Date.now() + Math.random(),
     itemId: null,
@@ -147,6 +205,10 @@ const BillingV4 = () => {
       return;
     }
 
+    const payments = buildPaymentsPayload();
+    const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const balanceAmount = parseFloat((totals.invoiceTotal - paidAmount).toFixed(2));
+
     const invoiceData = {
       invoiceNo: invoiceNo || `INV/${new Date().getFullYear()}/${Date.now()}`,
       invoiceDate: invoiceDate.toISOString().split('T')[0],
@@ -184,12 +246,12 @@ const BillingV4 = () => {
       })),
       balance: {
         invoiceAmount: totals.invoiceTotal,
-        paidAmount: 0,
-        balanceAmount: totals.invoiceTotal,
+        paidAmount: paidAmount,
+        balanceAmount: balanceAmount,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days
-        status: 'UNPAID'
+        status: paidAmount >= totals.invoiceTotal ? 'Paid' : 'Unpaid'
       },
-      payments: []
+      payments: payments
     };
 
     try {
@@ -201,6 +263,109 @@ const BillingV4 = () => {
       alert('Error saving invoice. Please try again.');
     }
   };
+
+  // Build invoice payload for save-and-print endpoint
+  const buildInvoicePayload = () => {
+    const payments = buildPaymentsPayload();
+    const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const balanceAmount = parseFloat((totals.invoiceTotal - paidAmount).toFixed(2));
+
+    const payload = {
+      invoiceNo: invoiceNo || `INV/${new Date().getFullYear()}/${Date.now()}`,
+      invoiceDate: invoiceDate.toISOString().split('T')[0],
+      unitId: 1, // Default unit ID
+      customerId: selectedCustomer?.customerId,
+      placeOfSupply: placeOfSupply,
+      stateCode: selectedCustomer?.stateCode || '',
+      reverseCharge: reverseCharge,
+      transporterName: transporterName || '',
+      vehicleNumber: vehicleNumber || '',
+      narration: narration || '',
+      items: items
+        .filter(item => item.itemId) // Only include items with itemId
+        .map(item => ({
+          itemId: item.itemId,
+          hsnCode: item.hsn || '',
+          quantity: item.qty,
+          rate: item.rate,
+          gstRate: item.gstP,
+          lineTotal: item.lineTotal,
+          itemName: item.itemName,
+          itemCode: item.itemCode || ''
+        })),
+      balance: {
+        invoiceAmount: totals.invoiceTotal,
+        paidAmount: paidAmount,
+        balanceAmount: balanceAmount,
+        status: paidAmount >= totals.invoiceTotal ? 'Paid' : 'Unpaid',
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      },
+      payments: payments
+    };
+    return payload;
+  };
+
+  // Handle Save & Print
+  const handleSaveAndPrint = async () => {
+    try {
+      // Validation
+      if (!selectedCustomer) {
+        setPrintError('Please select a customer');
+        return;
+      }
+
+      if (items.filter(item => item.itemId).length === 0) {
+        setPrintError('Please add at least one item to the invoice');
+        return;
+      }
+
+      const payments = buildPaymentsPayload();
+      const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      if (payments.length === 0) {
+        setPrintError('Please select a payment method before saving and printing.');
+        return;
+      }
+      if (totalPaid < totals.invoiceTotal - 0.01) {
+        setPrintError('Payment is incomplete. Complete the payment before saving and printing.');
+        return;
+      }
+
+      setPrintError(null);
+      setIsLoadingPrint(true);
+
+      const payload = buildInvoicePayload();
+
+      const response = await axios.post('/api/invoice/save-and-print', payload, {
+        responseType: 'blob', // Important: expect binary response
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Handle PDF response
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice_${invoiceNo || Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Optional: show success message
+      console.log('Invoice saved and PDF generated successfully');
+    } catch (error) {
+      console.error('Error saving and printing invoice:', error);
+      setPrintError(
+        error.response?.data?.message || 
+        'Failed to save and print invoice. Please try again.'
+      );
+    } finally {
+      setIsLoadingPrint(false);
+    }
+  };
+
   const [items, setItems] = useState([createEmptyRow()]);
   const [totals, setTotals] = useState({
     totalGross: 0,
@@ -256,6 +421,23 @@ const BillingV4 = () => {
   return (
     <div className="min-h-screen p-2 sm:p-4 md:p-3 text-[12px] font-poppins text-slate-700">
       <div className="max-w-[1500px] mx-auto bg-white  rounded-xl overflow-hidden border border-slate-200">
+
+        {/* ERROR NOTIFICATION */}
+        {printError && (
+          <div className="bg-red-50 border-b border-red-200 p-4 flex items-center gap-3 animate-in slide-in-from-top duration-300">
+            <XCircle size={18} className="text-red-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">Error</p>
+              <p className="text-xs text-red-700">{printError}</p>
+            </div>
+            <button
+              onClick={() => setPrintError(null)}
+              className="ml-auto text-red-500 hover:text-red-700 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* STICKY ACTION BAR */}
         <div className="flex bg-gradient-to-r from-[#061a4c] via-[#1e3a8a] to-[#061a4c] text-white p-3 gap-3 items-center  top-0 z-50 border-b border-white/10 shadow-lg backdrop-blur-md">
@@ -900,9 +1082,13 @@ const BillingV4 = () => {
           </button>
 
           {/* SECONDARY ACTION: PRINT */}
-          <button className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all active:bg-slate-900">
-            <Printer size={16} className="text-slate-400" />
-            Save & Print
+          <button 
+            onClick={handleSaveAndPrint}
+            disabled={isLoadingPrint}
+            className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:opacity-60 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all active:bg-slate-900"
+          >
+            <Printer size={16} className={`text-slate-400 ${isLoadingPrint ? 'animate-spin' : ''}`} />
+            {isLoadingPrint ? 'Processing...' : 'Save & Print'}
           </button>
 
           {/* COMMUNICATION */}
