@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Save, Printer, Mail, Send, Truck, XCircle, Plus, Trash2, MapPin, FileText, Search, Clock, Calendar, Hash, RefreshCcw, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
+import { Save, Printer, Mail, Send, Truck, XCircle, Plus, Trash2, MapPin, FileText, Search, Clock, Calendar, Hash, RefreshCcw, User, CreditCard, Landmark, ChevronDown, CheckCircleIcon, RotateCcw } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import KeyboardReturnIcon from '@mui/icons-material/KeyboardReturn';
 import { usePayment } from "../contextapi/PaymentContext";
@@ -25,7 +25,13 @@ const BillingReturnV4 = () => {
     const [narration, setNarration] = useState('');
     // from MultiTransaction Context
     const { showPaymentModal, setShowPaymentModal } = usePayment();
+    // Add this at the top of your component
+    const [editingId, setEditingId] = useState(null);
 
+    const toggleEdit = (id) => {
+        // If clicking the same button twice, it closes (disables) the row
+        setEditingId(prevId => prevId === id ? null : id);
+    };
     const createEmptyRow = () => ({
         id: Date.now() + Math.random(),
         itemId: null,
@@ -243,14 +249,95 @@ const BillingReturnV4 = () => {
     }, []);
 
     const handleItemChange = (index, field, value) => {
-        const updatedItems = [...items];
-        updatedItems[index][field] = value;
-        setItems(calculateTotals(updatedItems));
+        const updatedItems = items.map((item, i) => {
+            if (i === index) {
+                return {
+                    ...item,
+                    [field]: value
+                };
+            }
+            return item;
+        });
+
+        setItems(updatedItems);
     };
 
     const addNewRow = () => setItems([...items, createEmptyRow()]);
     const removeRow = (id) => { if (items.length > 1) setItems(calculateTotals(items.filter(item => item.id !== id))); };
     const handleKeyDown = (e, index) => { if (e.key === 'Tab' && !e.shiftKey && index === items.length - 1) addNewRow(); };
+
+    // Calculate total values for the items being returned
+    const returnTotals = items.reduce((acc, item) => {
+        const qty = Number(item.returnQty) || 0;
+        const gross = item.rate * qty;
+        const disc = gross * (Number(item.discP) / 100);
+        const taxable = gross - disc;
+        const gst = taxable * (Number(item.gstP) / 100);
+
+        return {
+            gross: acc.gross + gross,
+            disc: acc.disc + disc,
+            taxable: acc.taxable + taxable,
+            gst: acc.gst + gst,
+        };
+    }, { gross: 0, disc: 0, taxable: 0, gst: 0 });
+
+    const isReturnActive = returnTotals.gross > 0;
+    // Get API calling  
+    const getInvoiceByNumber = async (invNo) => {
+        try {
+            if (!invNo || invNo.length < 3) return;
+
+            const response = await axios.get('/api/invoice/search-by-number', {
+                params: { invoiceNo: invNo }
+            });
+
+            const data = response.data;
+            if (!data) return;
+
+            // 🔥 CUSTOMER AUTO FILL
+            setSelectedCustomer(data.customer);
+            console.log(response.data);
+            
+            const customerName =
+                data.customer?.customerName ||
+                data.customer?.name ||
+                "";
+
+            setCustomerSearch(customerName);
+
+            // 🔥 dropdown close kar
+            setShowCustomerDropdown(false);
+
+            // 🔥 ITEMS
+            const mappedItems = data.items.map((item) => ({
+                id: Date.now() + Math.random(),
+                itemId: item.itemId,
+                itemName: item.itemName || item.item?.itemName || "",
+                batch: item.batchCode || item.batch || "",
+                rate: item.rate,
+                qty: item.quantity,
+                returnQty: 0,
+                grossAmount: item.grossAmount,
+                discP: item.discountPct,
+                discA: item.discountAmt,
+                taxableAmt: item.taxableAmount,
+                gstP: item.gstRate,
+                gstA: item.cgstAmt + item.sgstAmt,
+                lineTotal: item.lineTotal,
+            }));
+
+            setItems(mappedItems);
+
+        } catch (err) {
+            console.log("ERROR:", err.response?.data);
+        }
+    };
+
+    // Return QTY table logic
+    const adjustmentList = items.filter(item => item.returnQty > 0);
+    const isAdjustmentActive = adjustmentList.length > 0;
+
 
     return (
         <div className="min-h-screen p-2 sm:p-4 md:p-3 text-[12px] font-poppins text-slate-700">
@@ -283,7 +370,7 @@ const BillingReturnV4 = () => {
 
                     {/* 1. SEARCH / LINK INVOICE (New Section) */}
                     <div className="col-span-12 md:col-span-3 p-4 border-r border-b border-amber-200/50 bg-white/40">
-                        <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Search Original Inv</label>
+                        <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Search Invoice</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <Search size={14} className="text-amber-500" />
@@ -292,8 +379,10 @@ const BillingReturnV4 = () => {
                                 type="text"
                                 className="w-full border border-amber-200 rounded-md p-2 pl-9 bg-white font-bold outline-none shadow-sm focus:ring-2 focus:ring-amber-400 transition-all placeholder:font-normal placeholder:text-slate-300"
                                 placeholder="Find invoice..."
-                            // value={searchQuery}
-                            // onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => {
+                                    setInvoiceNo(e.target.value);
+                                    getInvoiceByNumber(e.target.value);
+                                }}
                             />
                         </div>
                     </div>
@@ -472,7 +561,7 @@ const BillingReturnV4 = () => {
                                         </td>
 
                                         {/* Rate & Qty: Premium Input Focus */}
-                                        <td className="p-1 border-r border-slate-200/50 bg-slate-100/30">
+                                        <td className="p-1 border-r border-slate-200/50 bg-slate-100/30 font-poppins">
                                             <input
                                                 className="w-full bg-transparent border-none text-right text-[14px] text-slate-900 font-mono font-medium focus:bg-white focus:shadow-inner rounded transition-all outline-none pr-3"
                                                 type="text"
@@ -488,12 +577,21 @@ const BillingReturnV4 = () => {
                                             />
                                         </td>
 
-                                        {/* Return Qty: Rose Highlight */}
                                         <td className="p-1 border-r border-slate-200/50 bg-rose-50/20">
                                             <input
-                                                className="w-full bg-transparent border-none text-right text-[14px] text-rose-600 font-mono font-black focus:bg-white rounded transition-all outline-none pr-3"
-                                                type="text"
-                                                value={item.hsn}
+                                                className={`w-full bg-transparent border-none text-right text-[14px] font-mono font-black transition-all outline-none pr-3 
+            ${editingId === item.id ? 'text-rose-600' : 'text-slate-400 cursor-not-allowed'}`}
+                                                type="number"
+                                                min="0"
+                                                // THIS IS THE KEY PART
+                                                disabled={editingId !== item.id}
+                                                value={item.returnQty === 0 ? '' : item.returnQty}
+                                                onChange={(e) => {
+                                                    let val = Number(e.target.value);
+                                                    if (val < 0) val = 0;
+                                                    if (val > item.qty) val = item.qty;
+                                                    handleItemChange(idx, 'returnQty', val);
+                                                }}
                                             />
                                         </td>
 
@@ -531,29 +629,60 @@ const BillingReturnV4 = () => {
 
                                         {/* Actions */}
                                         <td className="p-2 text-center">
-                                            <button className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all duration-200">
-                                                <KeyboardReturnIcon size={18} />
+                                            <button
+                                                onClick={() => toggleEdit(item.id)}
+                                                className={`p-2 rounded-xl transition-all duration-200 ${editingId === item.id
+                                                    ? 'text-emerald-600 bg-emerald-50 shadow-sm scale-110'
+                                                    : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                                                    }`}
+                                            >
+                                                {/* Change icon based on state */}
+                                                {editingId === item.id ? (
+                                                    <CheckCircleIcon size={18} /> // Show "Done" icon when editing
+                                                ) : (
+                                                    <RotateCcw size={18} /> // Show "Return" icon normally
+                                                )}
                                             </button>
                                         </td>
                                     </tr>
 
-                                    {/* Detailed Tax Breakdown Row: Muted "Ghost" Row */}
+                                    {/* Detailed Tax Breakdown Row */}
                                     <tr className="bg-white/50 text-[10px] text-slate-400 border-b border-slate-200/60">
-                                        <td colSpan={3} className="py-2 px-6 text-right font-bold tracking-tight border-r border-slate-100">
-                                            BREAKDOWN
+                                        <td colSpan={3} className="py-2 px-6 text-right font-bold tracking-tight border-r border-slate-100 uppercase italic">
+                                            {item.returnQty > 0 ? "Return Breakdown" : "Tax Breakdown"}
                                         </td>
-                                        <td colSpan={2} className="py-2 px-4 border-r border-slate-100 italic">
-                                            Disc: <span className="text-slate-900 font-mono ml-1">₹120.00</span>
-                                        </td>
+
+                                        {/* Dynamic Discount (Adjust if you have a discount per unit logic) */}
                                         <td colSpan={2} className="py-2 px-4 border-r border-slate-100">
-                                            CGST <span className="text-slate-900 font-bold ml-1">₹{(item.gstA / 2).toFixed(2)}</span>
+                                            Disc: <span className="text-slate-900 font-bold ml-1">
+                                                ₹{((item.discP / 100) * (item.rate * (item.returnQty || item.qty))).toFixed(2)}
+                                            </span>
                                         </td>
-                                        <td colSpan={2} className="py-2 px-4 border-r border-slate-100">
-                                            SGST <span className="text-slate-900 font-bold ml-1">₹{(item.gstA / 2).toFixed(2)}</span>
-                                        </td>
-                                        <td colSpan={3} className="bg-slate-50/50 px-4">
-                                            <span className="text-[9px] uppercase tracking-tighter opacity-50">Invoice Ref: INV-2024-01</span>
-                                        </td>
+
+                                        {/* CGST & SGST Logic */}
+                                        {(() => {
+                                            // Calculate taxable amount based on Return Qty (fallback to original Qty if 0)
+                                            const activeQty = item.returnQty > 0 ? item.returnQty : item.qty;
+                                            const taxable = (item.rate * activeQty) * (1 - (item.discP / 100));
+                                            const totalGst = taxable * (item.gstP / 100);
+                                            const splitGst = (totalGst / 2).toFixed(2);
+
+                                            return (
+                                                <>
+                                                    <td colSpan={2} className="py-2 px-4 border-r border-slate-100">
+                                                        CGST <span className={`${item.returnQty > 0 ? 'text-rose-600' : 'text-slate-900'} font-bold ml-1`}>
+                                                            ₹{splitGst}
+                                                        </span>
+                                                    </td>
+                                                    <td colSpan={2} className="py-2 px-4 border-r border-slate-100">
+                                                        SGST <span className={`${item.returnQty > 0 ? 'text-rose-600' : 'text-slate-900'} font-bold ml-1`}>
+                                                            ₹{splitGst}
+                                                        </span>
+                                                    </td>
+
+                                                </>
+                                            );
+                                        })()}
                                     </tr>
                                 </React.Fragment>
                             ))}
@@ -563,24 +692,29 @@ const BillingReturnV4 = () => {
                 {/* SUMMARY FOOTER */}
                 {/* SUMMARY FOOTER - FULL WIDTH REFINED */}
                 <div className="grid grid-cols-12 border-t border-slate-200 w-full bg-white">
-
                     <div className="col-span-12 p-6 font-poppins space-y-6">
 
-                        {/* TOP ROW: Breakdown Boxes (Taxes & Billing) */}
+                        {/* TOP ROW: Breakdown Boxes */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                            {/* Box 1: Tax breakdown & Round Off */}
-                            <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
-                                <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-widest mb-2 border-b border-slate-200 pb-2">Taxes & Adjustments</h4>
+                            {/* Box 1: Tax breakdown */}
+                            <div className={`p-5 rounded-xl border transition-all duration-300 space-y-4 ${isReturnActive ? 'bg-rose-50/50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+                                <h4 className={`text-[11px] font-black uppercase tracking-widest mb-2 border-b pb-2 ${isReturnActive ? 'text-rose-600 border-rose-200' : 'text-blue-600 border-slate-200'}`}>
+                                    {isReturnActive ? 'Return Tax Adjustments' : 'Taxes & Adjustments'}
+                                </h4>
 
                                 <div className="flex gap-4">
                                     <div className="flex-1 flex flex-col">
                                         <span className="text-[10px] text-slate-400 font-bold uppercase">Total CGST</span>
-                                        <span className="font-bold text-black text-base">₹ {(totals.totalGST / 2).toFixed(2)}</span>
+                                        <span className={`font-bold text-base ${isReturnActive ? 'text-rose-700' : 'text-black'}`}>
+                                            ₹ {(isReturnActive ? returnTotals.gst / 2 : totals.totalGST / 2).toFixed(2)}
+                                        </span>
                                     </div>
                                     <div className="flex-1 flex flex-col border-l border-slate-200 pl-4">
                                         <span className="text-[10px] text-slate-400 font-bold uppercase">Total SGST</span>
-                                        <span className="font-bold text-black text-base">₹ {(totals.totalGST / 2).toFixed(2)}</span>
+                                        <span className={`font-bold text-base ${isReturnActive ? 'text-rose-700' : 'text-black'}`}>
+                                            ₹ {(isReturnActive ? returnTotals.gst / 2 : totals.totalGST / 2).toFixed(2)}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -590,75 +724,232 @@ const BillingReturnV4 = () => {
                                         <span className="font-bold text-black text-base">₹ 0.00</span>
                                     </div>
                                     <div className="flex-1 flex flex-col border-l border-slate-200 pl-4">
-                                        <span className="text-[10px] text-rose-500 font-bold uppercase">Round Off</span>
+                                        <span className={`text-[10px] font-bold uppercase ${isReturnActive ? 'text-rose-400' : 'text-rose-500'}`}>Round Off</span>
                                         <span className="font-bold text-black text-base">{totals.roundOff}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Box 2: Core Financial Totals */}
-                            <div className="bg-blue-50/30 p-5 rounded-xl border border-blue-100 space-y-4">
-                                <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-widest mb-2 border-b border-blue-100 pb-2">Billing Totals</h4>
+                            {/* Box 2: Billing Totals */}
+                            <div className={`p-5 rounded-xl border transition-all duration-300 space-y-4 ${isReturnActive ? 'bg-rose-50/30 border-rose-100' : 'bg-blue-50/30 border-blue-100'}`}>
+                                <h4 className={`text-[11px] font-black uppercase tracking-widest mb-2 border-b pb-2 ${isReturnActive ? 'text-rose-600 border-rose-100' : 'text-blue-600 border-blue-100'}`}>
+                                    {isReturnActive ? 'Return Financials' : 'Billing Totals'}
+                                </h4>
 
                                 <div className="flex gap-4">
                                     <div className="flex-1 flex flex-col">
                                         <span className="text-[10px] text-slate-400 font-bold uppercase">Total Gross</span>
-                                        <span className="font-bold text-slate-900 text-base">₹ {totals.totalGross.toFixed(2)}</span>
+                                        <span className="font-bold text-slate-900 text-base">
+                                            ₹ {(isReturnActive ? returnTotals.gross : totals.totalGross).toFixed(2)}
+                                        </span>
                                     </div>
-                                    <div className="flex-1 flex flex-col border-l border-blue-100 pl-4">
+                                    <div className={`flex-1 flex flex-col border-l pl-4 ${isReturnActive ? 'border-rose-100' : 'border-blue-100'}`}>
                                         <span className="text-[10px] text-green-600 font-bold uppercase">Total Disc</span>
-                                        <span className="font-bold text-green-700 text-base">−₹ {totals.totalDisc.toFixed(2)}</span>
+                                        <span className="font-bold text-green-700 text-base">
+                                            −₹ {(isReturnActive ? returnTotals.disc : totals.totalDisc).toFixed(2)}
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-4 pt-2 border-t border-blue-100">
+                                <div className={`flex gap-4 pt-2 border-t ${isReturnActive ? 'border-rose-100' : 'border-blue-100'}`}>
                                     <div className="flex-1 flex flex-col">
                                         <span className="text-[10px] text-slate-400 font-bold uppercase">Taxable Amt</span>
-                                        <span className="font-bold text-slate-700 text-base">₹ {totals.totalTaxable.toFixed(2)}</span>
+                                        <span className="font-bold text-slate-700 text-base">
+                                            ₹ {(isReturnActive ? returnTotals.taxable : totals.totalTaxable).toFixed(2)}
+                                        </span>
                                     </div>
-                                    <div className="flex-1 flex flex-col border-l border-blue-100 pl-4">
+                                    <div className={`flex-1 flex flex-col border-l pl-4 ${isReturnActive ? 'border-rose-100' : 'border-blue-100'}`}>
                                         <span className="text-[10px] text-blue-500 font-bold uppercase">Total GST</span>
-                                        <span className="font-bold text-blue-600 text-base">+₹ {totals.totalGST.toFixed(2)}</span>
+                                        <span className="font-bold text-blue-600 text-base">
+                                            +₹ {(isReturnActive ? returnTotals.gst : totals.totalGST).toFixed(2)}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* BOTTOM ROW: Full Width Final Amount Section */}
+                        {/* BOTTOM ROW: Final Amount Section */}
                         <div
                             onClick={() => setShowPaymentModal(true)}
-                            className="w-full bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-900 text-white p-6 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-xl hover:shadow-emerald-900/20 transition-all active:scale-[0.99] group"
+                            className={`w-full p-6 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.99] group ${isReturnActive
+                                ? 'bg-gradient-to-r from-rose-800 via-rose-700 to-rose-900 shadow-rose-900/20'
+                                : 'bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-900 shadow-emerald-900/20'
+                                }`}
                         >
                             <div className="relative z-10 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div className="p-4 bg-white/10 rounded-xl backdrop-blur-md border border-white/20 group-hover:bg-white/20 transition-colors">
-                                        <CreditCard size={32} />
+                                        {isReturnActive ? <RotateCcw size={32} /> : <CreditCard size={32} />}
                                     </div>
                                     <div>
-                                        <span className="block text-[11px] font-black uppercase tracking-[0.3em] text-emerald-100 opacity-80">
-                                            Invoice Payable Amount
+                                        <span className="block text-[11px] font-black uppercase tracking-[0.3em] text-white opacity-80">
+                                            {isReturnActive ? 'Total Refund Amount' : 'Invoice Payable Amount'}
                                         </span>
-                                        <p className="text-emerald-50/60 text-[10px] font-medium">Click to proceed with payment splitting</p>
+                                        <p className="text-white/60 text-[10px] font-medium">
+                                            {isReturnActive ? 'Click to process Credit Note' : 'Click to proceed with payment splitting'}
+                                        </p>
                                     </div>
                                 </div>
 
                                 <div className="text-right">
-                                    <div className="flex items-end justify-end gap-1">
-                                        <span className="text-2xl font-light text-emerald-200 mb-1.5">₹</span>
+                                    <div className="flex items-end justify-end gap-1 text-white">
+                                        <span className="text-2xl font-light text-white/70 mb-1.5">₹</span>
                                         <span className="text-5xl font-black tracking-tighter">
-                                            {totals.invoiceTotal.toLocaleString('en-IN')}
+                                            {(isReturnActive ? (returnTotals.taxable + returnTotals.gst) : totals.invoiceTotal).toLocaleString('en-IN')}
                                         </span>
                                         <span className="text-2xl font-black mb-1.5 opacity-90">.00</span>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Subtle glass effect decor */}
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
                         </div>
                     </div>
                 </div>
 
+                {/* PLACE THIS BELOW YOUR FINAL AMOUNT SECTION */}
+                {isAdjustmentActive && (
+                    <div className="mt-10 animate-in fade-in slide-in-from-bottom-5 duration-700">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-8 bg-rose-600 rounded-full shadow-[0_0_10px_rgba(225,29,72,0.5)]"></div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Credit Note Details</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Adjustment for returned stock</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-100 rounded-lg">
+                                <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+                                <span className="text-rose-700 text-[11px] font-black uppercase tracking-tighter">
+                                    {adjustmentList.length} Reversal {adjustmentList.length === 1 ? 'Line' : 'Lines'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Soft & Modern Adjustment Table */}
+                        <div className="mt-12 group animate-in fade-in zoom-in-95 duration-500">
+                            <div className="flex items-end justify-between mb-5 px-2">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">
+                                        Adjustment Ledger
+                                    </span>
+                                    <h3 className="text-2xl font-light text-slate-800">
+                                        Credit <span className="font-bold text-indigo-600">Reversal</span> Summary
+                                    </h3>
+                                </div>
+
+                            </div>
+
+                            <div className="relative overflow-hidden rounded-3xl bg-white/50 backdrop-blur-sm border border-slate-200 shadow-xl shadow-slate-200/50">
+                                {/* Subtle Decorative Gradient Flare */}
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/50 blur-3xl -mr-16 -mt-16 rounded-full"></div>
+
+                                <table className="w-full border-collapse relative z-10">
+                                    <thead>
+                                        <tr className="border-b border-slate-100">
+                                            <th className="p-6 text-center w-20">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Index</span>
+                                            </th>
+                                            <th className="p-6 text-left">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Particulars</span>
+                                            </th>
+                                            <th className="p-6 text-center">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Qty</span>
+                                            </th>
+                                            <th className="p-6 text-right">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Taxable Value</span>
+                                            </th>
+                                            <th className="p-6 text-right">
+                                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">GST Credit</span>
+                                            </th>
+                                            <th className="p-6 text-right">
+                                                <div className="inline-block px-4 py-1 bg-indigo-600 rounded-full">
+                                                    <span className="text-[10px] font-bold text-white uppercase tracking-widest text-center block">Sub-Total</span>
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    {/* Adjustment Rows */}
+                                    <tbody className="divide-y divide-slate-50">
+                                        {adjustmentList.map((entry, index) => {
+                                            const taxableCredit = (entry.rate * entry.returnQty) * (1 - (entry.discP / 100));
+                                            const gstCredit = taxableCredit * (entry.gstP / 100);
+                                            const rowTotal = taxableCredit + gstCredit;
+
+                                            return (
+                                                <tr key={`adj-${entry.id}`} className="hover:bg-indigo-50/30 transition-colors">
+                                                    {/* Reduced padding from p-6 to py-1 px-6 */}
+                                                    <td className="py-1 px-6 text-center font-mono text-[10px] text-slate-400">
+                                                        {String(index + 1).padStart(2, '0')}
+                                                    </td>
+
+                                                    <td className="py-1 px-6">
+                                                        {/* Shrunk text sizes to keep row height small */}
+                                                        <div className="font-bold text-slate-700 text-xs leading-tight">{entry.itemName}</div>
+                                                        <div className="flex gap-2 mt-0.5">
+                                                            <span className="text-[8px] text-slate-400 font-bold uppercase">
+                                                                BATCH: {entry.batch || 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="py-1 px-6 text-center">
+                                                        {/* Shrunk the Qty box size */}
+                                                        <div className="text-[10px] font-black text-slate-600 bg-white border border-slate-100 w-7 h-7 flex items-center justify-center rounded-lg mx-auto shadow-sm">
+                                                            {entry.returnQty}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="py-1 px-6 text-right font-mono text-[10px] text-slate-500">
+                                                        ₹{taxableCredit.toFixed(2)}
+                                                    </td>
+
+                                                    <td className="py-1 px-6 text-right font-mono text-[10px] text-indigo-500 font-semibold">
+                                                        + ₹{gstCredit.toFixed(2)}
+                                                    </td>
+
+                                                    <td className="py-1 px-6 text-right">
+                                                        {/* Shrunk total text size */}
+                                                        <span className="text-xs font-bold text-slate-800 tracking-tight">
+                                                            ₹{rowTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                    <tfoot className="border-t-2 border-slate-100">
+                                        <tr className="bg-indigo-50/30">
+                                            {/* Reduced padding from p-8 to py-2 px-6 */}
+                                            <td colSpan={5} className="py-2 px-6 text-right">
+                                                <span className="text-[10px] font-bold text-indigo-900/60 uppercase tracking-widest">
+                                                    Net Credit Value
+                                                </span>
+                                            </td>
+                                            <td className="py-2 px-6 text-right">
+                                                <div className="flex flex-col items-end">
+                                                    {/* Reduced font size from text-3xl to text-sm */}
+                                                    <span className="text-sm font-black text-indigo-700 tabular-nums">
+                                                        ₹{adjustmentList.reduce((sum, entry) => {
+                                                            const tax = (entry.rate * entry.returnQty) * (1 - (entry.discP / 100));
+                                                            return sum + (tax * (1 + entry.gstP / 100));
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                    {/* Shrunk the accent line to match the smaller text */}
+                                                    <div className="w-12 h-0.5 bg-indigo-600 mt-0.5 rounded-full shadow-[0_1px_4px_rgba(79,70,229,0.3)]"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <div className="mt-6 flex justify-center">
+
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div class="grid grid-cols-12 border-b border-amber-200/50">
 
                     <div class="col-span-12 md:col-span-6 p-4 border-r border-amber-200/50">
