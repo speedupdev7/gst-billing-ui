@@ -51,9 +51,11 @@ const MultiTransaction = ({ totals }) => {
 
                             {/* LEFT: Payment Selection */}
                             <div className="w-full lg:w-[260px] border-b lg:border-b-0 lg:border-r border-slate-200 bg-white p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
+
+                                {/* 1. Select Method Section (Now at the top) */}
                                 <section>
                                     <h4 className="text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-3">Select Method</h4>
-                                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-3 lg:grid-cols-2 gap-3">
                                         {[
                                             { type: 'Cash', icon: <Banknote size={18} />, color: 'emerald' },
                                             { type: 'UPI', icon: <QrCode size={18} />, color: 'indigo' },
@@ -74,7 +76,7 @@ const MultiTransaction = ({ totals }) => {
                                                         if (m.type === 'Discount') setDiscountMode(prev => ({ ...prev, [id]: 'rupee' }));
                                                     }}
                                                     className={`flex flex-col items-center justify-center gap-1 p-2.5 border rounded-xl transition-all shadow-sm relative
-                      ${isCashAlreadyAdded
+                            ${isCashAlreadyAdded
                                                             ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed filter grayscale'
                                                             : 'bg-slate-50 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 active:scale-95 text-slate-700'
                                                         }`}
@@ -87,6 +89,44 @@ const MultiTransaction = ({ totals }) => {
                                                 </button>
                                             );
                                         })}
+                                    </div>
+                                </section>
+
+                                {/* 2. Quick Balance Section (Now at the bottom) */}
+                                <section className="mt-auto p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Bill Summary</h4>
+                                    <div className="space-y-1.5">
+                                        {(() => {
+                                            const invoiceTotal = totals.invoiceTotal || 0;
+                                            const totalPaid = Object.entries(paymentSplit).reduce((sum, [id, val]) => {
+                                                const method = activeMethods.find(m => m.id === id);
+                                                const numVal = parseFloat(val) || 0;
+                                                if (method?.type === 'Discount' && discountMode[id] === 'percent') {
+                                                    return sum + (invoiceTotal * (numVal / 100));
+                                                }
+                                                return sum + numVal;
+                                            }, 0);
+                                            const outstanding = Math.max(0, invoiceTotal - totalPaid);
+
+                                            return (
+                                                <>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-medium text-slate-500">Total Invoice</span>
+                                                        <span className="text-[11px] font-bold text-slate-700">₹{invoiceTotal.toLocaleString('en-IN')}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-medium text-slate-500">Total Paid</span>
+                                                        <span className="text-[11px] font-bold text-emerald-600">₹{totalPaid.toLocaleString('en-IN')}</span>
+                                                    </div>
+                                                    <div className="pt-2 mt-1 border-t border-slate-200 flex justify-between items-center">
+                                                        <span className="text-[10px] font-bold text-slate-600 uppercase">Outstanding</span>
+                                                        <span className={`text-sm font-black ${outstanding > 0.01 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                                            ₹{outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </section>
                             </div>
@@ -221,15 +261,18 @@ const MultiTransaction = ({ totals }) => {
                                     <div className="max-w-4xl mx-auto w-full">
                                         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                                             <div className="flex items-center gap-8 lg:gap-12">
-                                                <div className="space-y-1">
+                                                {/* <div className="space-y-1">
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Total Paid</p>
                                                     <p className="text-xl lg:text-2xl font-black text-slate-900 tabular-nums">₹{totalPaid.toLocaleString('en-IN')}</p>
-                                                </div>
+                                                </div> */}
                                                 <div className="h-10 w-px bg-slate-200 hidden sm:block" />
                                                 <div className="space-y-1">
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Remaining</p>
                                                     <p className={`text-xl lg:text-2xl font-black tabular-nums ${remaining <= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                                        ₹{Math.max(0, remaining).toLocaleString('en-IN')}
+                                                        ₹{Math.max(0, remaining).toLocaleString('en-IN', {
+                                                            minimumFractionDigits: 2,
+                                                            maximumFractionDigits: 2
+                                                        })}
                                                     </p>
                                                 </div>
                                             </div>

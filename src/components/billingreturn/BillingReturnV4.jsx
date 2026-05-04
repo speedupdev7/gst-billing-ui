@@ -297,8 +297,7 @@ const BillingReturnV4 = () => {
 
             // 🔥 CUSTOMER AUTO FILL
             setSelectedCustomer(data.customer);
-            console.log(response.data);
-            
+
             const customerName =
                 data.customer?.customerName ||
                 data.customer?.name ||
@@ -333,7 +332,6 @@ const BillingReturnV4 = () => {
             console.log("ERROR:", err.response?.data);
         }
     };
-
     // Return QTY table logic
     const adjustmentList = items.filter(item => item.returnQty > 0);
     const isAdjustmentActive = adjustmentList.length > 0;
@@ -596,8 +594,8 @@ const BillingReturnV4 = () => {
                                         </td>
 
                                         {/* Gross (Read Only) */}
-                                        <td className="p-3 text-right text-slate-400 font-mono text-[12px] border-r border-slate-200/50">
-                                            {item.grossAmount.toFixed(2)}
+                                        <td className="p-3 text-right text-slate-400 font-poppins text-[12px] border-r border-slate-200/50">
+                                            {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}
                                         </td>
 
                                         {/* Discount % */}
@@ -832,8 +830,8 @@ const BillingReturnV4 = () => {
                                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">
                                         Adjustment Ledger
                                     </span>
-                                    <h3 className="text-2xl font-light text-slate-800">
-                                        Credit <span className="font-bold text-indigo-600">Reversal</span> Summary
+                                    <h3 className="text-2xl font-light text-slate-800 font-poppins">
+                                        Credit <span className="font-bold text-indigo-600"></span> Summary
                                     </h3>
                                 </div>
 
@@ -1033,7 +1031,16 @@ const BillingReturnV4 = () => {
                 </div>
             </div>
 
-            {showPaymentModal && <MultiTransaction totals={totals} />}
+            {showPaymentModal && (
+                <MultiTransaction
+                    totals={isReturnActive
+                        ? {
+                            invoiceTotal: returnTotals.taxable + returnTotals.gst
+                        }
+                        : totals
+                    }
+                />
+            )}
         </div>
     );
 };

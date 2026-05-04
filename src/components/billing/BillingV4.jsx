@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import{ useNavigate } from 'react-router-dom';
 import { Save, Printer, Mail, Send, Truck, XCircle, X, Plus, Trash2, MapPin, FileText, Search, Hash, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import { usePayment } from "../contextapi/PaymentContext";
@@ -7,6 +8,7 @@ import MultiTransaction from "../contextapi/MultiTransaction";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from 'axios';
 const BillingV4 = () => {
+  const navigate = useNavigate();
   const [paymentMode, setPaymentMode] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [invoiceTime, setInvoiceTime] = useState(new Date());
@@ -25,7 +27,7 @@ const BillingV4 = () => {
   const [transporterName, setTransporterName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [narration, setNarration] = useState('');
-//  HEAD
+  //  HEAD
   // from MultiTransaction Context
   const {
     activeMethods,
@@ -36,7 +38,7 @@ const BillingV4 = () => {
     setShowPaymentModal
   } = usePayment();
   const [activeRowIndex, setActiveRowIndex] = useState(null);
-  
+
   // Save & Print state
   const [isLoadingPrint, setIsLoadingPrint] = useState(false);
   const [printError, setPrintError] = useState(null);
@@ -290,6 +292,7 @@ const BillingV4 = () => {
       const response = await axios.post('/api/invoice', invoiceData);
       alert('Invoice saved successfully!');
       console.log('Saved invoice:', response.data);
+      navigate("/billing-v4-list");
     } catch (error) {
       console.error('Error saving invoice:', error);
       alert('Error saving invoice. Please try again.');
@@ -390,7 +393,7 @@ const BillingV4 = () => {
     } catch (error) {
       console.error('Error saving and printing invoice:', error);
       setPrintError(
-        error.response?.data?.message || 
+        error.response?.data?.message ||
         'Failed to save and print invoice. Please try again.'
       );
     } finally {
@@ -479,6 +482,18 @@ const BillingV4 = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-semibold text-sm tracking-tight text-white">TAX INVOICE</span>
+
+            </div>
+            <div>
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate("/billing-v4-list")}
+                  className="px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white shadow hover:bg-indigo-700 cursor-pointer"
+                >
+                  VIEW LIST
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -846,13 +861,29 @@ const BillingV4 = () => {
                         type="text"
                         inputMode="decimal"
                         placeholder="0%"
+                        // Use the raw value from state, but handle the 0 vs empty string display
                         value={item.discP === 0 ? '' : item.discP}
-                        onBlur={(e) => e.target.value === '' && handleItemChange(idx, 'discP', 0)}
+                        onBlur={(e) => {
+                          // Clean up the value on blur (e.g., if they left a trailing '.')
+                          const finalVal = parseFloat(e.target.value) || 0;
+                          handleItemChange(idx, 'discP', finalVal);
+                        }}
                         onChange={(e) => {
-                          // Allow only numbers and decimals
-                          const val = e.target.value.replace(/[^0-9.]/g, '');
-                          if ((val.match(/\./g) || []).length > 1) return;
-                          handleItemChange(idx, 'discP', parseFloat(val) || 0);
+                          const val = e.target.value;
+
+                          // 1. Allow empty string so user can delete everything
+                          if (val === '') {
+                            handleItemChange(idx, 'discP', 0);
+                            return;
+                          }
+
+                          // 2. Regex to allow typing: "0", "0.", "0.1", etc.
+                          // This regex allows numbers and a single optional decimal point
+                          if (/^\d*\.?\d*$/.test(val)) {
+                            // IMPORTANT: Pass the string directly to handleItemChange
+                            // Only parse it when you are doing the math calculations
+                            handleItemChange(idx, 'discP', val);
+                          }
                         }}
                       />
                     </td>
@@ -1126,7 +1157,7 @@ const BillingV4 = () => {
           </button>
 
           {/* SECONDARY ACTION: PRINT */}
-          <button 
+          <button
             onClick={handleSaveAndPrint}
             disabled={isLoadingPrint}
             className="flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 disabled:opacity-60 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-slate-700 transition-all active:bg-slate-900"
