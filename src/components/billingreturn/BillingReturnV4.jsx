@@ -314,16 +314,16 @@ const BillingReturnV4 = () => {
                 itemId: item.itemId,
                 itemName: item.itemName || item.item?.itemName || "",
                 batch: item.batchCode || item.batch || "",
-                rate: item.rate,
-                qty: item.quantity,
+                rate: item.rate ?? 0,
+                qty: item.quantity ?? 0,
                 returnQty: 0,
-                grossAmount: item.grossAmount,
-                discP: item.discountPct,
-                discA: item.discountAmt,
-                taxableAmt: item.taxableAmount,
-                gstP: item.gstRate,
-                gstA: item.cgstAmt + item.sgstAmt,
-                lineTotal: item.lineTotal,
+                grossAmount: item.grossAmount ?? 0,
+                discP: item.discountPct ?? 0,
+                discA: item.discountAmt ?? 0,
+                taxableAmt: item.taxableAmount ?? 0,
+                gstP: item.gstRate ?? 0,
+                gstA: (item.cgstAmt ?? 0) + (item.sgstAmt ?? 0),
+                lineTotal: item.lineTotal ?? 0,
             }));
 
             setItems(mappedItems);
@@ -594,8 +594,12 @@ const BillingReturnV4 = () => {
                                         </td>
 
                                         {/* Gross (Read Only) */}
+
                                         <td className="p-3 text-right text-slate-400 font-poppins text-[12px] border-r border-slate-200/50">
-                                            {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}
+                                            {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}</td>
+                                        <td className="p-3 text-right text-slate-400 font-mono text-[12px] border-r border-slate-200/50">
+                                            {Number(item.grossAmount ?? 0).toFixed(2)}
+
                                         </td>
 
                                         {/* Discount % */}
@@ -609,7 +613,7 @@ const BillingReturnV4 = () => {
 
                                         {/* Taxable */}
                                         <td className="p-3 text-right font-bold text-slate-600 text-[12px] border-r border-slate-200/50 bg-slate-200/20">
-                                            {item.taxableAmt.toFixed(2)}
+                                            {Number(item.taxableAmt ?? 0).toFixed(2)}
                                         </td>
 
                                         {/* GST % */}
