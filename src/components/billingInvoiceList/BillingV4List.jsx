@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { Search, Plus, Calendar, X, CheckCircle2, Clock, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, CheckCircle2, Clock, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
@@ -15,27 +15,35 @@ const BillingV4List = () => {
     const [toDate, setToDate] = useState(null);
     
     // --- Pagination State ---
-    const [currentPage, setCurrentPage] = useState(1);
-    const recordsPerPage = 10;
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
 
     const navigate = useNavigate();
 
     const fetchInvoices = async () => {
         try {
-            const res = await axios.get('/api/invoice');
-            setInvoices(res.data);
+            const res = await axios.get(`/api/invoice/balance/all-paginated?page=${page}&size=${pageSize}`);
+            const payload = res.data;
+            setInvoices(payload?.content || payload || []);
+            setTotalPages(payload?.totalPages ?? 0);
+            setTotalElements(payload?.totalElements ?? 0);
         } catch (err) {
             console.error("Error fetching invoices:", err);
+            setInvoices([]);
+            setTotalPages(0);
+            setTotalElements(0);
         }
     };
 
     useEffect(() => {
         fetchInvoices();
-    }, []);
+    }, [page, pageSize]);
 
-    // Reset to page 1 when searching or filtering
+    // Reset to first page when searching or filtering
     useEffect(() => {
-        setCurrentPage(1);
+        setPage(0);
     }, [searchTerm, fromDate, toDate]);
 
     const renderStatus = (status) => {
@@ -56,14 +64,14 @@ const BillingV4List = () => {
 
     // 1. Filter Logic
     const filteredInvoices = invoices.filter(inv => {
-        const name = (inv.customer?.customerName || inv.customerName || "").toLowerCase();
+        const name = (inv.unitName || inv.customer?.customerName || inv.customerName || "").toLowerCase();
         const invNo = (inv.invoiceNo || "").toLowerCase();
         const matchesSearch = invNo.includes(searchTerm.toLowerCase()) || name.includes(searchTerm.toLowerCase());
 
-        const invDate = new Date(inv.invoiceDate);
+        const invDate = inv.invoiceDate ? new Date(inv.invoiceDate) : null;
         let matchesDate = true;
-        if (fromDate && invDate < fromDate) matchesDate = false;
-        if (toDate) {
+        if (fromDate && invDate && invDate < fromDate) matchesDate = false;
+        if (toDate && invDate) {
             const end = new Date(toDate);
             end.setHours(23, 59, 59);
             if (invDate > end) matchesDate = false;
@@ -71,11 +79,9 @@ const BillingV4List = () => {
         return matchesSearch && matchesDate;
     });
 
-    // 2. Pagination Calculations
-    const indexOfLastRecord = currentPage * recordsPerPage;
-    const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-    const currentRecords = filteredInvoices.slice(indexOfFirstRecord, indexOfLastRecord);
-    const totalPages = Math.ceil(filteredInvoices.length / recordsPerPage);
+    // 2. Use server-provided page data
+    const indexOfFirstRecord = page * pageSize;
+    const currentRecords = filteredInvoices;
 
     return (
         <div className="min-h-screen bg-slate-50 p-6 font-poppins text-slate-600" style={{ fontFamily: "'Poppins', sans-serif" }}>
@@ -115,6 +121,18 @@ const BillingV4List = () => {
                             <button onClick={() => navigate('/billing_v4')} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 shadow-md">
                                 <Plus size={16} className="inline mr-1" /> New Entry
                             </button>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs text-slate-500">Show</label>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50/50"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -134,7 +152,7 @@ const BillingV4List = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {currentRecords.map((inv, index) => (
-                                <tr key={inv.id || index} className="hover:bg-indigo-50/10 transition-colors">
+                                <tr key={inv.balanceId || inv.invoiceNo || index} className="hover:bg-indigo-50/10 transition-colors">
                                     <td className="px-6 py-2.5 text-xs font-medium text-slate-400 text-center">
                                         {indexOfFirstRecord + index + 1}
                                     </td>
@@ -146,16 +164,16 @@ const BillingV4List = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-2.5 text-xs font-semibold text-slate-700">
-                                        {inv.customer?.customerName || inv.customerName}
+                                        {inv.unitName || 'N/A'}
                                     </td>
                                     <td className="px-6 py-2.5 text-xs font-medium text-slate-500">
                                         {inv.invoiceDate ? inv.invoiceDate.split('-').reverse().join('-') : 'N/A'}
                                     </td>
                                     <td className="px-6 py-2.5 text-right text-xs font-semibold text-indigo-950">
-                                        ₹{inv.finalAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        ₹{typeof inv.invoiceAmount === 'number' ? inv.invoiceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : parseFloat(inv.invoiceAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="px-6 py-2.5 text-center">
-                                        <div className="flex justify-center">{renderStatus(inv.paymentStatus)}</div>
+                                        <div className="flex justify-center">{renderStatus(inv.status)}</div>
                                     </td>
                                 </tr>
                             ))}
@@ -166,13 +184,13 @@ const BillingV4List = () => {
                 {/* --- Pagination Footer --- */}
                 <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between">
                     <p className="text-xs text-slate-500 font-medium">
-                        Showing <span className="text-indigo-600">{currentRecords.length}</span> of {filteredInvoices.length} records
+                        Showing <span className="text-indigo-600">{currentRecords.length}</span> of {totalElements} records
                     </p>
                     
                     <div className="flex items-center gap-2">
                         <button 
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(prev => prev - 1)}
+                            disabled={page === 0}
+                            onClick={() => setPage(prev => Math.max(prev - 1, 0))}
                             className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <ChevronLeft size={18} />
@@ -182,9 +200,9 @@ const BillingV4List = () => {
                             {[...Array(totalPages)].map((_, i) => (
                                 <button
                                     key={i}
-                                    onClick={() => setCurrentPage(i + 1)}
+                                    onClick={() => setPage(i)}
                                     className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                                        currentPage === i + 1 
+                                        page === i 
                                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
                                         : 'text-slate-500 hover:bg-slate-50'
                                     }`}
@@ -195,8 +213,8 @@ const BillingV4List = () => {
                         </div>
 
                         <button 
-                            disabled={currentPage === totalPages || totalPages === 0}
-                            onClick={() => setCurrentPage(prev => prev + 1)}
+                            disabled={page >= totalPages - 1 || totalPages === 0}
+                            onClick={() => setPage(prev => Math.min(prev + 1, totalPages - 1))}
                             className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <ChevronRight size={18} />
