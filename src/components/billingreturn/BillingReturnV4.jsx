@@ -596,7 +596,8 @@ const BillingReturnV4 = () => {
                                         {/* Gross (Read Only) */}
 
                                         <td className="p-3 text-right text-slate-400 font-poppins text-[12px] border-r border-slate-200/50">
-                                            {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}</td>
+                                            {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}
+                                        </td>
                                         <td className="p-3 text-right text-slate-400 font-mono text-[12px] border-r border-slate-200/50">
                                             {Number(item.grossAmount ?? 0).toFixed(2)}
 

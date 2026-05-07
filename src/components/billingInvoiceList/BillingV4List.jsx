@@ -242,7 +242,7 @@ const BillingV4List = () => {
                             <tr className="bg-indigo-50/20 border-b border-indigo-100">
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-16 text-center">Sr. No</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-40 text-center">Actions</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Client Name</th>
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Customer Name</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Date</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">Net Amount</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">Status</th>
