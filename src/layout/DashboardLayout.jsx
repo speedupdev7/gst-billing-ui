@@ -95,6 +95,16 @@ const initialMenu = [
       { key: "return-billing-v4", title: "Billing Return V4", path: "/billing-return-v4" },
     ],
   },
+
+
+  {
+    key: "billingsettlement",
+    title: "Billing Settlement",
+    icon: "billingsettlement",
+    children: [
+      { key: "settlement-billing-v4", title: "Billing Settlement V4", path: "/billing-settlement-v4" },
+    ],
+  },
   {
     key: "transactions",
     title: "Transactions",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import{ useNavigate } from 'react-router-dom';
+import { useNavigate,useParams,useSearchParams } from 'react-router-dom';
 import { Save, Printer, Mail, Send, Truck, XCircle, X, Plus, Trash2, MapPin, FileText, Search, Hash, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import { usePayment } from "../contextapi/PaymentContext";
@@ -27,6 +27,10 @@ const BillingV4 = () => {
   const [transporterName, setTransporterName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [narration, setNarration] = useState('');
+ const { id: invoiceId } = useParams();
+ const {id} = useParams();
+ const [searchParams] = useSearchParams();
+ console.log("Detected ID from Query String:", id);
   //  HEAD
   // from MultiTransaction Context
   const {
@@ -232,6 +236,109 @@ const BillingV4 = () => {
     setItemSearch('');
     setShowItemDropdown(false);
   };
+
+
+  // Edit Invoice API calling
+useEffect(() => {
+  const fetchInvoiceDetails = async () => {
+    if (!id) {
+      console.log("No ID found in URL, skipping fetch (Create Mode)");
+      return;
+    }
+
+    try {
+      console.log("Fetching details for Invoice ID:", id);
+      const response = await axios.get(`/api/invoice/${id}`);
+      
+      // THIS IS THE MOST IMPORTANT LOG
+      console.log("RAW API RESPONSE:", response.data);
+
+      const data = response.data;
+
+      // 1. Basic Fields
+      setInvoiceNo(data.invoiceNo || "");
+      setNarration(data.narration || "");
+      if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
+
+      // 2. Customer Mapping
+      // Logic check: Does your API return 'customer' or 'Customer'?
+      const customerData = data.customer || data.Customer;
+      if (customerData) {
+        console.log("Found Customer Data:", customerData);
+        setSelectedCustomer(customerData);
+        setCustomerSearch(customerData.customerName || "");
+      } else {
+        console.warn("No customer data found in response!");
+      }
+
+      // 3. Items Mapping
+      // Logic check: Does your API return 'items' or 'InvoiceItems'?
+      const apiItems = data.items || data.InvoiceItems || data.items_list;
+      
+      if (apiItems && Array.isArray(apiItems)) {
+        console.log("Found Items Array, count:", apiItems.length);
+        
+        const mappedItems = apiItems.map((item, index) => {
+          // Add a log for the first item to check field names
+          if (index === 0) console.log("First item field check:", item);
+
+          return {
+            id: item.id || Date.now() + Math.random(),
+            itemId: item.itemId,
+            itemName: item.itemName || item.item_name, // fallback for naming
+            hsn: item.hsnCode || item.hsn || "",
+            batch: item.batch || item.batchNo || "",
+            rate: Number(item.rate) || 0,
+            qty: Number(item.quantity) || Number(item.qty) || 0,
+            discP: Number(item.discountPercent) || Number(item.discP) || 0,
+            gstP: Number(item.gstRate) || Number(item.gstP) || 0,
+            grossAmount: 0, 
+            taxableAmt: 0,
+            lineTotal: 0
+          };
+        });
+        
+        // Use your existing helper to fix the math
+        const finalItems = calculateTotals(mappedItems);
+        console.log("Final Processed Items for State:", finalItems);
+        setItems(finalItems);
+      } else {
+        console.error("Items not found or not an array. Check 'apiItems' key name.");
+      }
+
+    } catch (error) {
+      console.error("FULL FETCH ERROR:", error);
+      toast.error("Data received, but failed to display. Check console.");
+    }
+  };
+
+  fetchInvoiceDetails();
+}, [id]);
+
+const updateInvoice = async () => {
+  // 1. Construct the payload from your separate states
+  const invoiceData = {
+    invoiceNo,
+    invoiceDate,
+    customerId: selectedCustomer?.customerId,
+    items: items, // Sending the array of items
+    totalTaxable: totals.totalTaxable,
+    totalGST: totals.totalGST,
+    invoiceTotal: totals.invoiceTotal,
+    narration
+  };
+
+  try {
+    // 2. Use PUT for updates
+    await axios.put(`/api/invoice/${id}`, invoiceData);
+    toast.success("Invoice updated successfully!");
+    navigate("/billing_v4/list"); 
+  } catch (error) {
+    console.error("Update Error:", error);
+    toast.error(error.response?.data?.message || "Failed to update invoice");
+  }
+};
+  // Edit api finish
 
   const saveInvoice = async () => {
     if (!selectedCustomer) {
@@ -1149,11 +1256,20 @@ const BillingV4 = () => {
 
           {/* PRIMARY ACTION: SAVE */}
           <button
-            className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30"
-            onClick={saveInvoice}
+            className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30 text-white"
+            onClick={invoiceId ? updateInvoice : saveInvoice} // Switches function based on ID
           >
-            <Save size={16} strokeWidth={2.5} />
-            Save Invoice
+            {invoiceId ? (
+              <>
+                <CheckCircle size={16} strokeWidth={2.5} />
+                Update Invoice
+              </>
+            ) : (
+              <>
+                <Save size={16} strokeWidth={2.5} />
+                Save Invoice
+              </>
+            )}
           </button>
 
           {/* SECONDARY ACTION: PRINT */}

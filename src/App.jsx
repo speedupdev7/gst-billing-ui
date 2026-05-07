@@ -82,6 +82,9 @@ import BillingV4List from "./components/billingInvoiceList/BillingV4List";
 // Billing Return List
 import BillingReturnV4 from "./components/billingreturn/BillingReturnV4";
 
+// Billing Settlement Screen
+import BillingV4Settlement from "./components/settelment/BillingV4Settelment";
+
 // Transactions
 import BillingTransaction from "./components/transactions/BillingTransactions";
 import PurchaseTransaction from "./components/transactions/PurchaseTransactions";
@@ -209,6 +212,9 @@ export default function App() {
 
                 {/* Billing Return  */}
                 <Route path="/billing-return-v4" element={<BillingReturnV4/>} />
+
+                  {/* Billing Settlement  */}
+                <Route path="/billing-settlement-v4" element={<BillingV4Settlement />} />
 
                 {/* Transactions */}
                 <Route path="bill-transaction" element={<BillingTransaction />} />
