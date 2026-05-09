@@ -11,6 +11,7 @@ import MastersImage from "../assets/MastersImage.png";
 import PurchaseImage from "../assets/PurchaseImage.png";
 import BillingImage from "../assets/billingImage.png";
 import BillingReturnImage from "../assets/billingReturn.png";
+import BillingsettlementImage from "../assets/BillSettlement.png";
 import TransactionImage from "../assets/TransactionImage.png";
 import ExpensesImage from "../assets/ExpensesImage.png";
 import ReportsImage from "../assets/ReportsImage.png";
@@ -29,6 +30,7 @@ const ICON_MAP = {
   setting: SettingImage,
   assign: AssignFunctionalityImage,
   billingreturn: BillingReturnImage,
+  billsettlement:BillingsettlementImage
 };
 
 const initialMenu = [
@@ -98,9 +100,9 @@ const initialMenu = [
 
 
   {
-    key: "billingsettlement",
+    key: "billsettlement",
     title: "Billing Settlement",
-    icon: "billingsettlement",
+    icon: "billsettlement",
     children: [
       { key: "settlement-billing-v4", title: "Billing Settlement V4", path: "/billing-settlement-v4" },
     ],

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { usePayment } from "./PaymentContext";
 import {
     X,
@@ -11,8 +11,41 @@ import {
     CreditCard,
     FileText
 } from "lucide-react";
-const MultiTransaction = ({ totals }) => {
+const MultiTransaction = ({
+    totals,
+    hasInvoiceDiscount = false
+}) => {
+    const currentScreen =
+        localStorage.getItem(
+            "activePaymentScreen"
+        );
+    useEffect(() => {
 
+        const savedScreen =
+            sessionStorage.getItem(
+                "lastPaymentScreen"
+            );
+
+        if (
+            savedScreen &&
+            savedScreen !== currentScreen
+        ) {
+
+            setActiveMethods([]);
+
+            setPaymentSplit({});
+
+            setPaymentRefs({});
+
+            setDiscountMode({});
+        }
+
+        sessionStorage.setItem(
+            "lastPaymentScreen",
+            currentScreen
+        );
+
+    }, []);
     const {
         activeMethods,
         setActiveMethods,
@@ -42,7 +75,11 @@ const MultiTransaction = ({ totals }) => {
                                 </div>
                                 <h2 className="text-base text-white sm:text-lg font-semibold font-poppins text-slate-800 tracking-tight">Finalize Transaction</h2>
                             </div>
-                            <button onClick={() => setShowPaymentModal(false)} className="p-2 hover:bg-slate-900 rounded-full text-white">
+                            <button onClick={() => {
+
+                                setShowPaymentModal(false);
+
+                            }} className="p-2 hover:bg-slate-900 rounded-full text-white">
                                 <X size={24} />
                             </button>
                         </div>
@@ -68,18 +105,77 @@ const MultiTransaction = ({ totals }) => {
                                             return (
                                                 <button
                                                     key={m.type}
-                                                    disabled={isCashAlreadyAdded}
+
+                                                    disabled={
+
+                                                        (m.type === "Cash" &&
+                                                            activeMethods.some(
+                                                                method => method.type === "Cash"
+                                                            )
+                                                        )
+
+                                                        ||
+
+                                                        (m.type === "Discount" &&
+                                                            hasInvoiceDiscount)
+                                                    }
+
                                                     onClick={() => {
-                                                        if (isCashAlreadyAdded) return;
+
+                                                        if (
+                                                            m.type === "Cash" &&
+                                                            activeMethods.some(
+                                                                method => method.type === "Cash"
+                                                            )
+                                                        ) return;
+
+                                                        if (
+                                                            m.type === "Discount" &&
+                                                            hasInvoiceDiscount
+                                                        ) return;
+
                                                         const id = `${m.type}-${Date.now()}`;
-                                                        setActiveMethods([...activeMethods, { type: m.type, id }]);
-                                                        if (m.type === 'Discount') setDiscountMode(prev => ({ ...prev, [id]: 'rupee' }));
+
+                                                        setActiveMethods([
+                                                            ...activeMethods,
+                                                            {
+                                                                type: m.type,
+                                                                id
+                                                            }
+                                                        ]);
+
+                                                        if (m.type === 'Discount') {
+
+                                                            setDiscountMode(prev => ({
+                                                                ...prev,
+                                                                [id]: 'rupee'
+                                                            }));
+                                                        }
                                                     }}
-                                                    className={`flex flex-col items-center justify-center gap-1 p-2.5 border rounded-xl transition-all shadow-sm relative
-                            ${isCashAlreadyAdded
-                                                            ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed filter grayscale'
-                                                            : 'bg-slate-50 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 active:scale-95 text-slate-700'
-                                                        }`}
+
+                                                    className={`
+
+        flex flex-col items-center justify-center gap-1 p-2.5 border rounded-xl transition-all shadow-sm relative
+
+        ${(
+                                                            m.type === "Cash" &&
+                                                            activeMethods.some(
+                                                                method => method.type === "Cash"
+                                                            )
+                                                        )
+
+                                                            ||
+
+                                                            (
+                                                                m.type === "Discount" &&
+                                                                hasInvoiceDiscount
+                                                            )
+
+                                                            ? "opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed grayscale"
+
+                                                            : "bg-slate-50 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 active:scale-95 text-slate-700"
+                                                        }
+    `}
                                                 >
                                                     <span className={`text-${m.color}-600`}>{m.icon}</span>
                                                     <span className="text-[10px] font-bold">{m.type}</span>
@@ -299,11 +395,18 @@ const MultiTransaction = ({ totals }) => {
                                                     Settle Balance
                                                 </button>
                                                 <button
-                                                    onClick={() => setShowPaymentModal(false)}
-                                                    disabled={remaining > 0.01 || totalPaid === 0} // Allowance for float precision
-                                                    className="flex-[2] sm:flex-none sm:px-10 h-12 bg-slate-900 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/10 active:scale-95"
+                                                    onClick={() => {
+
+                                                        setShowPaymentModal(false);
+                                                    }}
+                                                    className="flex-[2] sm:flex-none sm:px-10 h-12 bg-slate-900 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/10 active:scale-95 hover:bg-slate-800"
                                                 >
-                                                    Proceed <ArrowRight size={16} strokeWidth={3} />
+                                                    Proceed
+
+                                                    <ArrowRight
+                                                        size={16}
+                                                        strokeWidth={3}
+                                                    />
                                                 </button>
                                             </div>
                                         </div>

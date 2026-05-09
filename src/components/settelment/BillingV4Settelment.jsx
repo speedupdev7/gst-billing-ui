@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
     Save,
     Printer,
@@ -15,7 +16,7 @@ import {
 import DatePicker from "react-datepicker";
 import MultiTransaction from "../contextapi/MultiTransaction";
 import { usePayment } from "../contextapi/PaymentContext";
-
+import axios from "axios";
 const SettlementV1 = () => {
     const { setShowPaymentModal } = usePayment();
     const [settlementNo, setSettlementNo] = useState("SET-2026-001");
@@ -24,7 +25,7 @@ const SettlementV1 = () => {
     );
     const [customerSearch, setCustomerSearch] = useState("");
     const [narration, setNarration] = useState("");
-
+    const screenKey = "settlement";
     const createEmptyRow = () => ({
         id: Date.now() + Math.random(),
         invoiceNo: "",
@@ -35,19 +36,105 @@ const SettlementV1 = () => {
         settlementAmount: "",
         paymentMode: "Cash",
     });
+    const [items, setItems] = useState([]);
+    const [searchParams] = useSearchParams();
 
-    const [items, setItems] = useState([
-        {
-            id: 1,
-            invoiceNo: "INV-1001",
-            invoiceDate: "2026-05-07",
-            billAmount: 15000,
-            paidAmount: 10000,
-            balanceAmount: 5000,
-            settlementAmount: 5000,
-            paymentMode: "Cash",
-        },
-    ]);
+    const invoiceId =
+        searchParams.get("invoiceId");
+    useEffect(() => {
+
+        fetchPendingInvoices();
+
+    }, []);
+
+    const fetchPendingInvoices = async () => {
+
+        try {
+
+            const response = await axios.get(
+                `/api/invoice/${invoiceId}`
+            );
+
+            const inv = response.data;
+
+            const data = [{
+
+                id: inv.invoiceId,
+
+                invoiceNo: inv.invoiceNo,
+
+                invoiceDate: inv.invoiceDate,
+
+                billAmount:
+                    (inv.totalGrossAmount || 0) +
+                    (inv.totalCgst || 0) +
+                    (inv.totalSgst || 0) +
+                    (inv.totalIgst || 0) +
+                    (inv.roundOff || 0),
+
+                paidAmount:
+                    inv.payments?.reduce(
+                        (sum, p) =>
+                            sum + Number(p.amount || 0),
+                        0
+                    ) || 0,
+
+                balanceAmount: Number(
+
+                    (
+                        (
+                            (inv.totalGrossAmount || 0) +
+                            (inv.totalCgst || 0) +
+                            (inv.totalSgst || 0) +
+                            (inv.totalIgst || 0) +
+                            (inv.roundOff || 0)
+                        )
+
+                        -
+
+                        (
+                            inv.payments?.reduce(
+                                (sum, p) =>
+                                    sum + Number(p.amount || 0),
+                                0
+                            ) || 0
+                        )
+
+                    ).toFixed(2)
+                ),
+                settlementAmount: Number(
+
+                    (
+                        (
+                            (inv.totalGrossAmount || 0) +
+                            (inv.totalCgst || 0) +
+                            (inv.totalSgst || 0) +
+                            (inv.totalIgst || 0) +
+                            (inv.roundOff || 0)
+                        )
+
+                        -
+
+                        (
+                            inv.payments?.reduce(
+                                (sum, p) =>
+                                    sum + Number(p.amount || 0),
+                                0
+                            ) || 0
+                        )
+
+                    ).toFixed(2)
+                ),
+                paymentMode: "Cash"
+            }];
+
+            setItems(data);
+            console.log(response.data);
+        } catch (error) {
+
+            console.error(error);
+        }
+    };
 
     const handleItemChange = (index, field, value) => {
         const updated = [...items];
@@ -156,62 +243,108 @@ const SettlementV1 = () => {
                                 <th className="p-4 text-center">Invoice Date</th>
                                 <th className="p-4 text-center text-blue-300">Bill Amount</th>
                                 <th className="p-4 text-center text-emerald-300">Paid Amount</th>
-                                <th className="p-4 text-center text-red-300">Balance</th>
+                                <th className="p-4 text-center text-red-300">Pending Balance</th>
                                 <th className="p-4 text-center text-yellow-300">Settlement</th>
                                 <th className="p-4 text-center">Action</th>
                             </tr>
                         </thead>
+
                         <tbody className="bg-white divide-y divide-slate-100">
                             {items.map((item, idx) => (
                                 <tr key={item.id} className="hover:bg-slate-50 transition-all">
-                                    <td className="p-3 text-center text-slate-400 font-medium">{idx + 1}</td>
+                                    <td className="p-3 text-center text-slate-400 font-medium">
+                                        {idx + 1}
+                                    </td>
+
                                     <td className="p-2">
                                         <input
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none font-semibold focus:border-amber-400"
                                             value={item.invoiceNo}
-                                            onChange={(e) => handleItemChange(idx, "invoiceNo", e.target.value)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "invoiceNo",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2">
                                         <input
                                             type="date"
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-amber-400"
                                             value={item.invoiceDate}
-                                            onChange={(e) => handleItemChange(idx, "invoiceDate", e.target.value)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "invoiceDate",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2">
                                         <input
                                             type="number"
                                             className="w-full bg-blue-50/50 border border-blue-100 rounded-lg py-2 text-center font-bold outline-none"
-                                            value={item.billAmount}
-                                            onChange={(e) => handleItemChange(idx, "billAmount", e.target.value)}
+                                           value={Number(item.billAmount || 0).toFixed(2)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "billAmount",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2">
                                         <input
                                             type="number"
                                             className="w-full bg-emerald-50/50 border border-emerald-100 rounded-lg py-2 text-center font-bold text-emerald-700 outline-none"
-                                            value={item.paidAmount}
-                                            onChange={(e) => handleItemChange(idx, "paidAmount", e.target.value)}
+                                           value={Number(item.paidAmount || 0).toFixed(2)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "paidAmount",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2">
                                         <input
                                             type="number"
                                             className="w-full bg-red-50/50 border border-red-100 rounded-lg py-2 text-center font-bold text-red-600 outline-none"
-                                            value={item.balanceAmount}
-                                            onChange={(e) => handleItemChange(idx, "balanceAmount", e.target.value)}
+                                            value={Number(item.paidAmount || 0).toFixed(2)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "balanceAmount",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2">
                                         <input
                                             type="number"
                                             className="w-full bg-yellow-50/50 border border-yellow-100 rounded-lg py-2 text-center font-bold text-yellow-700 outline-none"
-                                            value={item.settlementAmount}
-                                            onChange={(e) => handleItemChange(idx, "settlementAmount", e.target.value)}
+                                            value={Number(item.paidAmount || 0).toFixed(2)}
+                                            onChange={(e) =>
+                                                handleItemChange(
+                                                    idx,
+                                                    "settlementAmount",
+                                                    e.target.value
+                                                )
+                                            }
                                         />
                                     </td>
+
                                     <td className="p-2 text-center">
                                         <div className="flex items-center justify-center gap-2">
                                             <button
@@ -220,6 +353,7 @@ const SettlementV1 = () => {
                                             >
                                                 <XCircle size={18} />
                                             </button>
+
                                             {idx === items.length - 1 && (
                                                 <button
                                                     onClick={addNewRow}
@@ -236,10 +370,22 @@ const SettlementV1 = () => {
                     </table>
                 </div>
 
+                {/* SUMMARY CARDS */}
+
+
+
                 {/* SETTLEMENT CARD (MODAL TRIGGER) - Responsive sizing for Tablet */}
                 <div className="p-4 md:p-6">
                     <div
-                        onClick={() => setShowPaymentModal(true)}
+                        onClick={() => {
+
+                            localStorage.setItem(
+                                "activePaymentScreen",
+                                screenKey
+                            );
+
+                            setShowPaymentModal(true);
+                        }}
                         className="w-full bg-gradient-to-br from-amber-600 to-amber-800 text-white p-5 md:p-8 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-2xl hover:shadow-amber-900/30 transition-all active:scale-[0.98] group"
                     >
                         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:bg-white/20 transition-all" />

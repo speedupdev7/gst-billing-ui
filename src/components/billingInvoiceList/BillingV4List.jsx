@@ -4,6 +4,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Plus, CheckCircle2, Clock, AlertCircle, ChevronLeft, ChevronRight, X, FileText, User, Calendar, ShoppingBag, Trash2, RotateCcw } from 'lucide-react';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ChangeCircleIcon from '@mui/icons-material/ChangeCircle';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import { useNavigate } from 'react-router-dom';
@@ -109,7 +110,9 @@ const BillingV4List = () => {
             return (
                 <button
                     onClick={() =>
-                        navigate(`/billing-settlement-v4?id=${invoice.invoiceId || invoice.balanceId}`)
+                        navigate(
+                            `/billing-settlement-v4?invoiceId=${invoice.invoiceId || invoice.balanceId}`
+                        )
                     }
                     className={`${baseClass} bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100 cursor-pointer`}
                 >
@@ -125,7 +128,9 @@ const BillingV4List = () => {
             return (
                 <button
                     onClick={() =>
-                        navigate(`/billing-settlement-v4?id=${invoice.invoiceId || invoice.balanceId}`)
+                        navigate(
+                            `/billing-settlement-v4?invoiceId=${invoice.invoiceId || invoice.balanceId}`
+                        )
                     }
                     className={`${baseClass} bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 cursor-pointer`}
                 >
@@ -177,7 +182,7 @@ const BillingV4List = () => {
                 <div className="px-6 py-5 border-b border-indigo-50 bg-white">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div className="flex items-center gap-5">
-                            <h2 className="text-xl font-semibold text-indigo-950 tracking-tight">Invoice Master</h2>
+                            <h2 className="text-xl font-semibold text-indigo-950 tracking-tight">Invoice List</h2>
                             <div className="flex items-center gap-2">
                                 <DatePicker
                                     selected={fromDate}
@@ -216,7 +221,7 @@ const BillingV4List = () => {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            <button onClick={() => navigate('/billing_v4')} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all active:scale-95">
+                            <button onClick={() => navigate('/billing_v4')} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all active:scale-95 cursor-pointer">
                                 <Plus size={16} className="inline mr-1" /> New Entry
                             </button>
                             <div className="flex items-center gap-2">
@@ -244,7 +249,7 @@ const BillingV4List = () => {
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-40 text-center">Actions</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Customer Name</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Date</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">Net Amount</th>
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">Bill Amount</th>
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">Status</th>
                             </tr>
                         </thead>
@@ -260,20 +265,21 @@ const BillingV4List = () => {
                                                 <button
                                                     onClick={() => handleViewDetails(inv)}
                                                     title="View Details"
-                                                    className="w-7 h-7 flex items-center justify-center text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-all"
+                                                    className="w-7 h-7 flex items-center justify-center text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-all cursor-pointer"
                                                 >
                                                     <VisibilityIcon sx={{ fontSize: 15 }} />
                                                 </button>
                                                 <button
-                                                    onClick={() => navigate(`/billing_v4?id=${inv.invoiceId || inv.balanceId}`)} title="Edit Invoice"
-                                                    className="w-7 h-7 flex items-center justify-center text-sky-500 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-md transition-all"
+                                                    title="Return Invoice"
+                                                    onClick={() => navigate("/billing-return-v4")}
+                                                    className="w-7 h-7 flex items-center justify-center text-sky-500 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-md transition-all cursor-pointer"
                                                 >
-                                                    <ModeEditIcon sx={{ fontSize: 15 }} />
+                                                    <ChangeCircleIcon sx={{ fontSize: 20 }} />
                                                 </button>
                                                 <button
                                                     onClick={() => openDeleteModal(inv.invoiceId || inv.balanceId)}
                                                     title="Delete Invoice"
-                                                    className="w-7 h-7 flex items-center justify-center text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-md transition-all"
+                                                    className="w-7 h-7 flex items-center justify-center text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-md transition-all cursor-pointer"
                                                 >
                                                     <DeleteIcon sx={{ fontSize: 15 }} />
                                                 </button>

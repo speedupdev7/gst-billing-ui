@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate,useParams,useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Save, Printer, Mail, Send, Truck, XCircle, X, Plus, Trash2, MapPin, FileText, Search, Hash, User, CreditCard, Landmark, ChevronDown } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import { usePayment } from "../contextapi/PaymentContext";
@@ -27,10 +27,11 @@ const BillingV4 = () => {
   const [transporterName, setTransporterName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [narration, setNarration] = useState('');
- const { id: invoiceId } = useParams();
- const {id} = useParams();
- const [searchParams] = useSearchParams();
- console.log("Detected ID from Query String:", id);
+  const { id: invoiceId } = useParams();
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const screenKey = "billing-v4";
+  console.log("Detected ID from Query String:", id);
   //  HEAD
   // from MultiTransaction Context
   const {
@@ -39,13 +40,21 @@ const BillingV4 = () => {
     paymentRefs,
     discountMode,
     showPaymentModal,
-    setShowPaymentModal
+
+    setShowPaymentModal,
+    setActiveMethods,
+    setPaymentSplit,
+    setPaymentRefs,
+    setDiscountMode
+
   } = usePayment();
   const [activeRowIndex, setActiveRowIndex] = useState(null);
 
   // Save & Print state
   const [isLoadingPrint, setIsLoadingPrint] = useState(false);
   const [printError, setPrintError] = useState(null);
+
+
 
   const getPaymentAmount = (method) => {
     const rawValue = parseFloat(paymentSplit[method.id] || 0) || 0;
@@ -57,6 +66,7 @@ const BillingV4 = () => {
     }
     return rawValue;
   };
+
 
   const buildPaymentsPayload = () => {
     const methods = activeMethods.map((method) => {
@@ -239,105 +249,105 @@ const BillingV4 = () => {
 
 
   // Edit Invoice API calling
-useEffect(() => {
-  const fetchInvoiceDetails = async () => {
-    if (!id) {
-      console.log("No ID found in URL, skipping fetch (Create Mode)");
-      return;
-    }
+  useEffect(() => {
+    const fetchInvoiceDetails = async () => {
+      if (!id) {
+        console.log("No ID found in URL, skipping fetch (Create Mode)");
+        return;
+      }
+
+      try {
+        console.log("Fetching details for Invoice ID:", id);
+        const response = await axios.get(`/api/invoice/${id}`);
+
+        // THIS IS THE MOST IMPORTANT LOG
+        console.log("RAW API RESPONSE:", response.data);
+
+        const data = response.data;
+
+        // 1. Basic Fields
+        setInvoiceNo(data.invoiceNo || "");
+        setNarration(data.narration || "");
+        if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
+
+        // 2. Customer Mapping
+        // Logic check: Does your API return 'customer' or 'Customer'?
+        const customerData = data.customer || data.Customer;
+        if (customerData) {
+          console.log("Found Customer Data:", customerData);
+          setSelectedCustomer(customerData);
+          setCustomerSearch(customerData.customerName || "");
+        } else {
+          console.warn("No customer data found in response!");
+        }
+
+        // 3. Items Mapping
+        // Logic check: Does your API return 'items' or 'InvoiceItems'?
+        const apiItems = data.items || data.InvoiceItems || data.items_list;
+
+        if (apiItems && Array.isArray(apiItems)) {
+          console.log("Found Items Array, count:", apiItems.length);
+
+          const mappedItems = apiItems.map((item, index) => {
+            // Add a log for the first item to check field names
+            if (index === 0) console.log("First item field check:", item);
+
+            return {
+              id: item.id || Date.now() + Math.random(),
+              itemId: item.itemId,
+              itemName: item.itemName || item.item_name, // fallback for naming
+              hsn: item.hsnCode || item.hsn || "",
+              batch: item.batch || item.batchNo || "",
+              rate: Number(item.rate) || 0,
+              qty: Number(item.quantity) || Number(item.qty) || 0,
+              discP: Number(item.discountPercent) || Number(item.discP) || 0,
+              gstP: Number(item.gstRate) || Number(item.gstP) || 0,
+              grossAmount: 0,
+              taxableAmt: 0,
+              lineTotal: 0
+            };
+          });
+
+          // Use your existing helper to fix the math
+          const finalItems = calculateTotals(mappedItems);
+          console.log("Final Processed Items for State:", finalItems);
+          setItems(finalItems);
+        } else {
+          console.error("Items not found or not an array. Check 'apiItems' key name.");
+        }
+
+      } catch (error) {
+        console.error("FULL FETCH ERROR:", error);
+        toast.error("Data received, but failed to display. Check console.");
+      }
+    };
+
+    fetchInvoiceDetails();
+  }, [id]);
+
+  const updateInvoice = async () => {
+    // 1. Construct the payload from your separate states
+    const invoiceData = {
+      invoiceNo,
+      invoiceDate,
+      customerId: selectedCustomer?.customerId,
+      items: items, // Sending the array of items
+      totalTaxable: totals.totalTaxable,
+      totalGST: totals.totalGST,
+      invoiceTotal: totals.invoiceTotal,
+      narration
+    };
 
     try {
-      console.log("Fetching details for Invoice ID:", id);
-      const response = await axios.get(`/api/invoice/${id}`);
-      
-      // THIS IS THE MOST IMPORTANT LOG
-      console.log("RAW API RESPONSE:", response.data);
-
-      const data = response.data;
-
-      // 1. Basic Fields
-      setInvoiceNo(data.invoiceNo || "");
-      setNarration(data.narration || "");
-      if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
-
-      // 2. Customer Mapping
-      // Logic check: Does your API return 'customer' or 'Customer'?
-      const customerData = data.customer || data.Customer;
-      if (customerData) {
-        console.log("Found Customer Data:", customerData);
-        setSelectedCustomer(customerData);
-        setCustomerSearch(customerData.customerName || "");
-      } else {
-        console.warn("No customer data found in response!");
-      }
-
-      // 3. Items Mapping
-      // Logic check: Does your API return 'items' or 'InvoiceItems'?
-      const apiItems = data.items || data.InvoiceItems || data.items_list;
-      
-      if (apiItems && Array.isArray(apiItems)) {
-        console.log("Found Items Array, count:", apiItems.length);
-        
-        const mappedItems = apiItems.map((item, index) => {
-          // Add a log for the first item to check field names
-          if (index === 0) console.log("First item field check:", item);
-
-          return {
-            id: item.id || Date.now() + Math.random(),
-            itemId: item.itemId,
-            itemName: item.itemName || item.item_name, // fallback for naming
-            hsn: item.hsnCode || item.hsn || "",
-            batch: item.batch || item.batchNo || "",
-            rate: Number(item.rate) || 0,
-            qty: Number(item.quantity) || Number(item.qty) || 0,
-            discP: Number(item.discountPercent) || Number(item.discP) || 0,
-            gstP: Number(item.gstRate) || Number(item.gstP) || 0,
-            grossAmount: 0, 
-            taxableAmt: 0,
-            lineTotal: 0
-          };
-        });
-        
-        // Use your existing helper to fix the math
-        const finalItems = calculateTotals(mappedItems);
-        console.log("Final Processed Items for State:", finalItems);
-        setItems(finalItems);
-      } else {
-        console.error("Items not found or not an array. Check 'apiItems' key name.");
-      }
-
+      // 2. Use PUT for updates
+      await axios.put(`/api/invoice/${id}`, invoiceData);
+      toast.success("Invoice updated successfully!");
+      navigate("/billing_v4/list");
     } catch (error) {
-      console.error("FULL FETCH ERROR:", error);
-      toast.error("Data received, but failed to display. Check console.");
+      console.error("Update Error:", error);
+      toast.error(error.response?.data?.message || "Failed to update invoice");
     }
   };
-
-  fetchInvoiceDetails();
-}, [id]);
-
-const updateInvoice = async () => {
-  // 1. Construct the payload from your separate states
-  const invoiceData = {
-    invoiceNo,
-    invoiceDate,
-    customerId: selectedCustomer?.customerId,
-    items: items, // Sending the array of items
-    totalTaxable: totals.totalTaxable,
-    totalGST: totals.totalGST,
-    invoiceTotal: totals.invoiceTotal,
-    narration
-  };
-
-  try {
-    // 2. Use PUT for updates
-    await axios.put(`/api/invoice/${id}`, invoiceData);
-    toast.success("Invoice updated successfully!");
-    navigate("/billing_v4/list"); 
-  } catch (error) {
-    console.error("Update Error:", error);
-    toast.error(error.response?.data?.message || "Failed to update invoice");
-  }
-};
   // Edit api finish
 
   const saveInvoice = async () => {
@@ -361,9 +371,9 @@ const updateInvoice = async () => {
       totalGrossAmount: totals.totalGross,
       totalDiscount: totals.totalDisc,
       taxableAmount: totals.totalTaxable,
-      totalCgst: totals.totalGST / 2,
-      totalSgst: totals.totalGST / 2,
-      totalIgst: 0,
+      totalCgst: isSameState ? totals.totalGST / 2 : 0,
+      totalSgst: isSameState ? totals.totalGST / 2 : 0,
+      totalIgst: !isSameState ? totals.totalGST : 0,
       roundOff: parseFloat(totals.roundOff),
       finalAmount: totals.invoiceTotal,
       transporterName: transporterName,
@@ -380,9 +390,9 @@ const updateInvoice = async () => {
         discountAmt: item.discA,
         taxableAmount: item.taxableAmt,
         gstRate: item.gstP,
-        cgstAmt: item.gstA / 2,
-        sgstAmt: item.gstA / 2,
-        igstAmt: 0,
+        cgstAmt: item.cgst || 0,
+        sgstAmt: item.sgst || 0,
+        igstAmt: item.igst || 0,
         lineTotal: item.lineTotal
       })),
       balance: {
@@ -399,6 +409,15 @@ const updateInvoice = async () => {
       const response = await axios.post('/api/invoice', invoiceData);
       alert('Invoice saved successfully!');
       console.log('Saved invoice:', response.data);
+      setActiveMethods([]);
+
+      setPaymentSplit({});
+
+      setPaymentRefs({});
+
+      setDiscountMode({});
+
+      setShowPaymentModal(false);
       navigate("/billing-v4-list");
     } catch (error) {
       console.error('Error saving invoice:', error);
@@ -518,6 +537,12 @@ const updateInvoice = async () => {
     roundOff: 0
   });
 
+  const BILLING_STATE_CODE = "27";
+
+  const isSameState =
+    String(selectedCustomer?.stateCode || "") ===
+    BILLING_STATE_CODE;
+
   const calculateTotals = useCallback((currentItems) => {
     let tGross = 0;
     let tDisc = 0;
@@ -528,11 +553,43 @@ const updateInvoice = async () => {
       const discount = (gross * item.discP) / 100;
       const taxable = gross - discount;
       const taxAmount = (taxable * item.gstP) / 100;
+      let cgstAmount = 0;
+      let sgstAmount = 0;
+      let igstAmount = 0;
+
+      if (isSameState) {
+
+        cgstAmount = taxAmount / 2;
+
+        sgstAmount = taxAmount / 2;
+
+      } else {
+
+        igstAmount = taxAmount;
+      }
       const total = taxable + taxAmount;
       tGross += gross;
       tDisc += discount;
       tGST += taxAmount;
-      return { ...item, grossAmount: gross, discA: discount, taxableAmt: taxable, gstA: taxAmount, lineTotal: total };
+      return {
+        ...item,
+
+        grossAmount: gross,
+
+        discA: discount,
+
+        taxableAmt: taxable,
+
+        gstA: taxAmount,
+
+        cgst: cgstAmount,
+
+        sgst: sgstAmount,
+
+        igst: igstAmount,
+
+        lineTotal: total
+      };
     });
 
     const finalTotal = tGross - tDisc + tGST;
@@ -546,7 +603,7 @@ const updateInvoice = async () => {
       roundOff: (rounded - finalTotal).toFixed(2)
     });
     return updatedItems;
-  }, []);
+  }, [isSameState]);
 
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
@@ -898,7 +955,7 @@ const updateInvoice = async () => {
                     {/* HSN */}
                     <td className="p-1 border-r border-slate-50">
                       <input
-                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[14px] text-slate-500 outline-none"
+                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[12px] text-slate-500 outline-none"
                         type="text"
                         value={item.hsn}
                         onChange={(e) => handleItemChange(idx, 'hsn', e.target.value)}
@@ -909,7 +966,7 @@ const updateInvoice = async () => {
                     {/* Batch */}
                     <td className="p-1 border-r border-slate-50">
                       <input
-                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[14px] text-slate-500 outline-none"
+                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-slate-200 rounded px-1 py-1 text-[12px] text-slate-500 outline-none"
                         type="text"
                         value={item.batch || ''}
                         onChange={(e) => handleItemChange(idx, 'batch', e.target.value)}
@@ -1059,18 +1116,21 @@ const updateInvoice = async () => {
                     </td>
                     {/* 3. CGST */}
                     <td colSpan={2} className="py-1 px-2 border-r border-slate-200/60">
-                      CGST <span className="text-slate-900 font-bold ml-1">₹{(item.gstA / 2).toFixed(2)}</span>
-                    </td>
+                      CGST <span className="text-slate-900 font-bold ml-1">
+                        ₹{Number(item.cgst || 0).toFixed(2)}
+                      </span>                    </td>
 
                     {/* 4. SGST */}
                     <td colSpan={2} className="py-1 px-2 border-r border-slate-200/60">
-                      SGST <span className="text-slate-900 font-bold ml-1">₹{(item.gstA / 2).toFixed(2)}</span>
-                    </td>
+                      SGST <span className="text-slate-900 font-bold ml-1">
+                        ₹{Number(item.sgst || 0).toFixed(2)}
+                      </span>                    </td>
 
                     {/* 5. IGST */}
                     <td colSpan={2} className="py-1 px-2 border-r border-slate-200/60">
-                      IGST <span className="text-slate-900 font-bold ml-1">₹{item.igst?.toFixed(2) || "0.00"}</span>
-                    </td>
+                      IGST <span className="text-slate-900 font-bold ml-1">
+                        ₹{Number(item.igst || 0).toFixed(2)}
+                      </span>                    </td>
 
                     {/* 6. Final Spacer (Aligned with Total Amount column) */}
                     <td colSpan={1} className="bg-slate-100/20"></td>
@@ -1131,18 +1191,30 @@ const updateInvoice = async () => {
                 <div className="flex gap-4">
                   <div className="flex-1 flex flex-col">
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Total CGST</span>
-                    <span className="font-bold text-black text-base">₹ {(totals.totalGST / 2).toFixed(2)}</span>
+                    <span className="font-bold text-black text-base">₹ {
+                      isSameState
+                        ? (totals.totalGST / 2).toFixed(2)
+                        : "0.00"
+                    }</span>
                   </div>
                   <div className="flex-1 flex flex-col border-l border-slate-200 pl-4">
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Total SGST</span>
-                    <span className="font-bold text-black text-base">₹ {(totals.totalGST / 2).toFixed(2)}</span>
+                    <span className="font-bold text-black text-base">₹ {
+                      isSameState
+                        ? (totals.totalGST / 2).toFixed(2)
+                        : "0.00"
+                    }</span>
                   </div>
                 </div>
 
                 <div className="flex gap-4 pt-2 border-t border-slate-200/60">
                   <div className="flex-1 flex flex-col">
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Total IGST</span>
-                    <span className="font-bold text-black text-base">₹ 0.00</span>
+                    <span className="font-bold text-black text-base">₹ {
+                      !isSameState
+                        ? totals.totalGST.toFixed(2)
+                        : "0.00"
+                    }</span>
                   </div>
                   <div className="flex-1 flex flex-col border-l border-slate-200 pl-4">
                     <span className="text-[10px] text-rose-500 font-bold uppercase">Round Off</span>
@@ -1181,7 +1253,15 @@ const updateInvoice = async () => {
 
             {/* BOTTOM ROW: Full Width Final Amount Section */}
             <div
-              onClick={() => setShowPaymentModal(true)}
+              onClick={() => {
+
+                localStorage.setItem(
+                  "activePaymentScreen",
+                  screenKey
+                );
+
+                setShowPaymentModal(true);
+              }}
               className="w-full bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-900 text-white p-6 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-xl hover:shadow-emerald-900/20 transition-all active:scale-[0.99] group"
             >
               <div className="relative z-10 flex items-center justify-between">
@@ -1310,8 +1390,20 @@ const updateInvoice = async () => {
         </div>
       </div>
 
-      {showPaymentModal && <MultiTransaction totals={totals} />}
+      {showPaymentModal && (
+
+        <MultiTransaction
+
+          totals={totals}
+
+          hasInvoiceDiscount={
+            Number(totals.totalDisc || 0) > 0
+          }
+
+        />
+      )}
     </div>
+
   );
 };
 

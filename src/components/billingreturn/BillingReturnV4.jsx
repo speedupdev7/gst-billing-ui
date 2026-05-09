@@ -23,6 +23,7 @@ const BillingReturnV4 = () => {
     const [transporterName, setTransporterName] = useState('');
     const [vehicleNumber, setVehicleNumber] = useState('');
     const [narration, setNarration] = useState('');
+    const screenKey = "return";
     // from MultiTransaction Context
     const { showPaymentModal, setShowPaymentModal } = usePayment();
     // Add this at the top of your component
@@ -598,10 +599,7 @@ const BillingReturnV4 = () => {
                                         <td className="p-3 text-right text-slate-400 font-poppins text-[12px] border-r border-slate-200/50">
                                             {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}
                                         </td>
-                                        <td className="p-3 text-right text-slate-400 font-mono text-[12px] border-r border-slate-200/50">
-                                            {Number(item.grossAmount ?? 0).toFixed(2)}
-
-                                        </td>
+                                        
 
                                         {/* Discount % */}
                                         <td className="p-1 border-r border-slate-200/50">
@@ -773,7 +771,15 @@ const BillingReturnV4 = () => {
 
                         {/* BOTTOM ROW: Final Amount Section */}
                         <div
-                            onClick={() => setShowPaymentModal(true)}
+                            onClick={() => {
+
+                                localStorage.setItem(
+                                    "activePaymentScreen",
+                                    screenKey
+                                );
+
+                                setShowPaymentModal(true);
+                            }}
                             className={`w-full p-6 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.99] group ${isReturnActive
                                 ? 'bg-gradient-to-r from-rose-800 via-rose-700 to-rose-900 shadow-rose-900/20'
                                 : 'bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-900 shadow-emerald-900/20'
