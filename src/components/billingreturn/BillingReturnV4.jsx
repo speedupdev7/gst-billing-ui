@@ -296,44 +296,66 @@ const BillingReturnV4 = () => {
                 params: { invoiceNo: invNo }
             });
 
-            const data = response.data;
+            const data = response.data?.data || response.data;
             if (!data) return;
 
-            // 🔥 CUSTOMER AUTO FILL
-            setSelectedCustomer(data.customer);
+            const customer = data.customer || data.unit || data.customerMaster || null;
+            setSelectedCustomer(customer);
 
             const customerName =
-                data.customer?.customerName ||
-                data.customer?.name ||
+                customer?.customerName ||
+                customer?.name ||
+                data.customerName ||
+                data.unitName ||
                 "";
 
             setCustomerSearch(customerName);
-
-            // 🔥 dropdown close kar
             setShowCustomerDropdown(false);
 
-            // 🔥 ITEMS
-            const mappedItems = data.items.map((item) => ({
+            setInvoiceNo(data.invoiceNo || invNo);
+            if (data.invoiceDate) {
+                setInvoiceDate(new Date(data.invoiceDate));
+            }
+            if (data.placeOfSupply) {
+                setPlaceOfSupply(data.placeOfSupply);
+            }
+            setReverseCharge(Boolean(data.reverseCharge));
+            setTransporterName(data.transporterName || data.transporter || '');
+            setVehicleNumber(data.vehicleNumber || data.vehicleNo || '');
+            setNarration(data.narration || data.notes || '');
+
+            const invoiceItems = data.invoiceItems || data.items || [];
+            const mappedItems = invoiceItems.map((item) => ({
                 id: Date.now() + Math.random(),
                 itemId: item.itemId,
                 itemName: item.itemName || item.item?.itemName || "",
+                itemNameDetails: item.itemNameDetails || item.item?.description || "",
                 batch: item.batchCode || item.batch || "",
                 rate: item.rate ?? 0,
-                qty: item.quantity ?? 0,
+                qty: item.quantity ?? item.qty ?? 0,
                 returnQty: 0,
                 grossAmount: item.grossAmount ?? 0,
-                discP: item.discountPct ?? 0,
-                discA: item.discountAmt ?? 0,
-                taxableAmt: item.taxableAmount ?? 0,
-                gstP: item.gstRate ?? 0,
+                discP: item.discountPct ?? item.discP ?? 0,
+                discA: item.discountAmt ?? item.discA ?? 0,
+                taxableAmt: item.taxableAmount ?? item.taxableAmt ?? 0,
+                gstP: item.gstRate ?? item.gstP ?? 0,
                 gstA: (item.cgstAmt ?? 0) + (item.sgstAmt ?? 0),
                 lineTotal: item.lineTotal ?? 0,
             }));
 
-            setItems(mappedItems);
+            const updatedItems = calculateTotals(mappedItems);
+            setItems(updatedItems);
+
+            if (data.balance) {
+                setTotals(prev => ({
+                    ...prev,
+                    invoiceTotal: data.balance.invoiceAmount ?? prev.invoiceTotal,
+                    roundOff: data.balance.roundOff?.toFixed(2) ?? prev.roundOff,
+                }));
+            }
 
         } catch (err) {
-            console.log("ERROR:", err.response?.data);
+            console.log("ERROR:", err.response?.data || err.message);
         }
     };
     // Return QTY table logic
