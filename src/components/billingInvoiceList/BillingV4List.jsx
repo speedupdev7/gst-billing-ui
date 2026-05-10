@@ -25,6 +25,7 @@ const BillingV4List = () => {
 
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
     const navigate = useNavigate();
     const toast = useToast();
@@ -61,9 +62,25 @@ const BillingV4List = () => {
         setPage(0);
     };
 
-    const handleViewDetails = (invoice) => {
-        setSelectedInvoice(invoice);
-        setIsModalOpen(true);
+    const handleViewDetails = async (invoice) => {
+        const invoiceNumber = invoice?.invoiceNo;
+        if (!invoiceNumber) {
+            toast.error("Invoice number not available for detail view.");
+            return;
+        }
+
+        setIsLoadingDetails(true);
+        try {
+            const res = await axios.get(`/api/invoice/search-by-number?invoiceNo=${encodeURIComponent(invoiceNumber)}`);
+            const payload = res?.data?.data || res?.data || invoice;
+            setSelectedInvoice(payload);
+            setIsModalOpen(true);
+        } catch (err) {
+            console.error("Error fetching invoice details:", err);
+            toast.error("Unable to load invoice details. Please try again.");
+        } finally {
+            setIsLoadingDetails(false);
+        }
     };
 
     const openDeleteModal = (invoiceId) => {
@@ -166,6 +183,10 @@ const BillingV4List = () => {
     });
 
     const indexOfFirstRecord = page * pageSize;
+    const selectedBalance = selectedInvoice?.balance || selectedInvoice;
+    const netPayableAmount = selectedBalance?.invoiceAmount ?? selectedInvoice?.invoiceAmount ?? 0;
+    const paidAmount = selectedBalance?.paidAmount ?? (netPayableAmount - (selectedBalance?.balanceAmount ?? selectedInvoice?.balanceAmount ?? 0));
+    const dueBalanceAmount = selectedBalance?.balanceAmount ?? selectedInvoice?.balanceAmount ?? 0;
 
     return (
         <div className="min-h-screen bg-slate-50 p-6 font-poppins text-slate-600" style={{ fontFamily: "'Poppins', sans-serif" }}>
@@ -590,16 +611,16 @@ const BillingV4List = () => {
                             <div className="bg-slate-50 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-center gap-4 border border-slate-100">
                                 <div className="text-center md:text-left">
                                     <label className="text-[10px] uppercase font-bold text-indigo-400 tracking-widest">Net Payable</label>
-                                    <p className="text-3xl font-bold text-indigo-700">₹{selectedInvoice.invoiceAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-3xl font-bold text-indigo-700">₹{netPayableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="flex gap-8">
                                     <div className="text-right border-r border-slate-200 pr-8">
                                         <label className="text-[10px] uppercase font-bold text-emerald-500">Paid</label>
-                                        <p className="text-sm font-bold text-slate-700">₹{(selectedInvoice.invoiceAmount - (selectedInvoice.balanceAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                        <p className="text-sm font-bold text-slate-700">₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                     </div>
                                     <div className="text-right">
                                         <label className="text-[10px] uppercase font-bold text-rose-400">Due Balance</label>
-                                        <p className="text-sm font-bold text-rose-500">₹{(selectedInvoice.balanceAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                        <p className="text-sm font-bold text-rose-500">₹{dueBalanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                     </div>
                                 </div>
                             </div>
