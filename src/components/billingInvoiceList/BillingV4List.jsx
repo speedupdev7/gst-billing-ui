@@ -245,69 +245,232 @@ const BillingV4List = () => {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-indigo-50/20 border-b border-indigo-100">
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-16 text-center">Sr. No</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-40 text-center">Actions</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Customer Name</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">Date</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">Bill Amount</th>
-                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">Status</th>
+
+                                {/* SR NO */}
+
+
+
+                                {/* ACTIONS */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-40 text-center">
+                                    Actions
+                                </th>
+
+                                {/* INVOICE NO */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Inv No
+                                </th>
+
+                                {/* INVOICE DATE */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Inv Date
+                                </th>
+
+                                {/* CUSTOMER NAME */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">
+                                    Customer Name
+                                </th>
+
+                                {/* TOTAL PAID */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
+                                    Total Paid
+                                </th>
+
+                                {/* PENDING AMOUNT */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
+                                    Pending Amount
+                                </th>
+
+                                {/* STATUS */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Status
+                                </th>
+
                             </tr>
                         </thead>
+
                         <tbody className="divide-y divide-slate-100">
-                            {filteredInvoices.length > 0 ? (
-                                filteredInvoices.map((inv, index) => (
-                                    <tr key={inv.balanceId || inv.invoiceId || index} className="hover:bg-indigo-50/10 transition-colors">
-                                        <td className="px-6 py-2.5 text-xs font-medium text-slate-400 text-center">
-                                            {indexOfFirstRecord + index + 1}
+
+                            {
+                                filteredInvoices.length > 0 ? (
+
+                                    filteredInvoices.map((inv, index) => {
+
+                                        const billAmount =
+                                            Number(inv.invoiceAmount || 0);
+
+                                        let pendingAmount = 0;
+                                        let totalPaid = 0;
+
+                                        if (
+                                            inv.status?.toLowerCase() === "paid"
+                                        ) {
+
+                                            totalPaid = billAmount;
+                                            pendingAmount = 0;
+
+                                        }
+                                        else {
+
+                                            pendingAmount = billAmount;
+                                            totalPaid = 0;
+                                        }
+
+                                        return (
+
+                                            <tr
+                                                key={inv.balanceId || inv.invoiceId || index}
+                                                className="hover:bg-indigo-50/10 transition-colors"
+                                            >
+
+
+
+                                                {/* ACTIONS */}
+
+                                                <td className="px-6 py-2.5">
+
+                                                    <div className="flex items-center justify-center gap-2.5">
+
+                                                        <button
+                                                            onClick={() => handleViewDetails(inv)}
+                                                            title="View Details"
+                                                            className="w-7 h-7 flex items-center justify-center text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-all cursor-pointer"
+                                                        >
+
+                                                            <VisibilityIcon sx={{ fontSize: 15 }} />
+
+                                                        </button>
+
+                                                        <button
+                                                            title="Return Invoice"
+                                                            onClick={() =>
+                                                                navigate("/billing-return-v4")
+                                                            }
+                                                            className="w-7 h-7 flex items-center justify-center text-sky-500 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-md transition-all cursor-pointer"
+                                                        >
+
+                                                            <ChangeCircleIcon sx={{ fontSize: 20 }} />
+
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() =>
+                                                                openDeleteModal(
+                                                                    inv.invoiceId || inv.balanceId
+                                                                )
+                                                            }
+                                                            title="Delete Invoice"
+                                                            className="w-7 h-7 flex items-center justify-center text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-md transition-all cursor-pointer"
+                                                        >
+
+                                                            <DeleteIcon sx={{ fontSize: 15 }} />
+
+                                                        </button>
+
+                                                    </div>
+
+                                                </td>
+
+                                                {/* INVOICE NO */}
+
+                                                <td className="px-6 py-2.5 text-xs font-bold text-indigo-700 text-center">
+
+                                                    {inv.invoiceNo || "N/A"}
+
+                                                </td>
+
+                                                {/* INVOICE DATE */}
+
+                                                <td className="px-6 py-2.5 text-xs font-medium text-slate-500 text-center">
+
+                                                    {
+                                                        inv.invoiceDate
+                                                            ? inv.invoiceDate
+                                                                .split("-")
+                                                                .reverse()
+                                                                .join("-")
+                                                            : "N/A"
+                                                    }
+
+                                                </td>
+
+                                                {/* CUSTOMER NAME */}
+
+                                                <td className="px-6 py-2.5 text-xs font-semibold text-slate-700">
+
+                                                    {inv.unitName || "N/A"}
+
+                                                </td>
+
+                                                {/* TOTAL PAID */}
+
+                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-emerald-600">
+
+                                                    ₹{
+                                                        totalPaid.toLocaleString(
+                                                            "en-IN",
+                                                            {
+                                                                minimumFractionDigits: 2
+                                                            }
+                                                        )
+                                                    }
+
+                                                </td>
+
+                                                {/* PENDING AMOUNT */}
+
+                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-rose-500">
+
+                                                    ₹{
+                                                        pendingAmount.toLocaleString(
+                                                            "en-IN",
+                                                            {
+                                                                minimumFractionDigits: 2
+                                                            }
+                                                        )
+                                                    }
+
+                                                </td>
+
+                                                {/* STATUS */}
+
+                                                <td className="px-6 py-2.5 text-center">
+
+                                                    <div className="flex justify-center">
+
+                                                        {renderStatus(inv.status, inv)}
+
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+                                        );
+                                    })
+
+                                ) : (
+
+                                    <tr>
+
+                                        <td
+                                            colSpan="8"
+                                            className="px-6 py-10 text-center text-slate-400 text-xs italic"
+                                        >
+
+                                            No invoices found. Try adjusting your filters.
+
                                         </td>
-                                        <td className="px-6 py-2.5">
-                                            <div className="flex items-center justify-center gap-2.5">
-                                                <button
-                                                    onClick={() => handleViewDetails(inv)}
-                                                    title="View Details"
-                                                    className="w-7 h-7 flex items-center justify-center text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-all cursor-pointer"
-                                                >
-                                                    <VisibilityIcon sx={{ fontSize: 15 }} />
-                                                </button>
-                                                <button
-                                                    title="Return Invoice"
-                                                    onClick={() => navigate("/billing-return-v4")}
-                                                    className="w-7 h-7 flex items-center justify-center text-sky-500 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-md transition-all cursor-pointer"
-                                                >
-                                                    <ChangeCircleIcon sx={{ fontSize: 20 }} />
-                                                </button>
-                                                <button
-                                                    onClick={() => openDeleteModal(inv.invoiceId || inv.balanceId)}
-                                                    title="Delete Invoice"
-                                                    className="w-7 h-7 flex items-center justify-center text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-md transition-all cursor-pointer"
-                                                >
-                                                    <DeleteIcon sx={{ fontSize: 15 }} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-2.5 text-xs font-semibold text-slate-700">
-                                            {inv.unitName || 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-2.5 text-xs font-medium text-slate-500">
-                                            {inv.invoiceDate ? inv.invoiceDate.split('-').reverse().join('-') : 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-2.5 text-right text-xs font-semibold text-indigo-950">
-                                            ₹{typeof inv.invoiceAmount === 'number' ? inv.invoiceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : parseFloat(inv.invoiceAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="px-6 py-2.5 text-center">
-                                            <div className="flex justify-center">
-                                                {renderStatus(inv.status, inv)}
-                                            </div>
-                                        </td>
+
                                     </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan="6" className="px-6 py-10 text-center text-slate-400 text-xs italic">
-                                        No invoices found. Try adjusting your filters.
-                                    </td>
-                                </tr>
-                            )}
+                                )
+                            }
+
                         </tbody>
                     </table>
                 </div>

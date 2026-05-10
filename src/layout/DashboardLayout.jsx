@@ -107,6 +107,20 @@ const initialMenu = [
       { key: "settlement-billing-v4", title: "Billing Settlement V4", path: "/billing-settlement-v4" },
     ],
   },
+
+  
+  {
+    key: "inventory",
+    title: "Inventory",
+    icon: "inventory",
+    children: [
+      { key: "opening-stock", title: "Opening Stock", path: "/opening-stock" },
+      { key: "stock-expiry", title: "Stock Expiry", path: "/stock-expiry" },
+      { key: "stock-order", title: "Stock Order", path: "/stock-order" },
+      { key: "stock-transfer", title: "Stock Transfer", path: "/stock-transfer" },
+    ],
+  },
+
   {
     key: "transactions",
     title: "Transactions",

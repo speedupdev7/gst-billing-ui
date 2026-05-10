@@ -23,6 +23,9 @@ const BillingReturnV4 = () => {
     const [transporterName, setTransporterName] = useState('');
     const [vehicleNumber, setVehicleNumber] = useState('');
     const [narration, setNarration] = useState('');
+    // return all item state
+    const [returnAll, setReturnAll] = useState(false);
+    const [clearAll, setClearAll] = useState(false);
     const screenKey = "return";
     // from MultiTransaction Context
     const { showPaymentModal, setShowPaymentModal } = usePayment();
@@ -441,24 +444,139 @@ const BillingReturnV4 = () => {
 
                 {/* CUSTOMER SECTION */}
                 <div className="border-t border-amber-200">
-                    <div className="p-3 bg-amber-100/30 flex items-center gap-2 border-b border-amber-200">
-                        <User size={14} className="text-amber-600" />
-                        <span className="font-bold text-amber-800 uppercase tracking-wider text-[10px]">Customer & Billing Details</span>
-                    </div>
 
-                    <div className="grid grid-cols-12 gap-0">
-                        {/* ROW 1: Identity */}
-                        <div className="col-span-12 md:col-span-2 p-4 border-r border-b border-amber-200/50 bg-slate-50/30">
-                            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Customer ID</label>
-                            <div className="relative">
-                                <input type="text" className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all" placeholder="CUST-001" />
-                                <Hash size={14} className="absolute left-2.5 top-3 text-slate-400" />
-                            </div>
+                    {/* HEADER */}
+
+                    <div className="p-3 bg-amber-100/30 flex items-center justify-between border-b border-amber-200">
+
+                        {/* LEFT SIDE */}
+
+                        <div className="flex items-center gap-2">
+
+                            <User
+                                size={14}
+                                className="text-amber-600"
+                            />
+
+                            <span className="font-bold text-amber-800 uppercase tracking-wider text-[10px]">
+                                Customer & Billing Details
+                            </span>
+
                         </div>
 
-                        <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-amber-200/50">
-                            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Customer Name</label>
+                        {/* RIGHT SIDE CHECKBOXES */}
+
+                        {/* RETURN ALL */}
+                        <label className="ml-auto flex items-center gap-2 cursor-pointer justify-end">
+
+                            <input
+                                type="checkbox"
+                                checked={returnAll}
+                                onChange={(e) => {
+
+                                    const checked = e.target.checked;
+
+                                    setReturnAll(checked);
+
+                                    if (checked) {
+
+                                        const updatedItems = items.map(item => ({
+                                            ...item,
+                                            returnQty: item.qty
+                                        }));
+
+                                        setItems(updatedItems);
+
+                                    }
+                                }}
+                                className="w-3.5 h-3.5 accent-amber-600"
+                            />
+
+                            <span className="text-[10px] font-bold uppercase text-amber-700 tracking-wide">
+                                Return All
+                            </span>
+
+                        </label>
+
+                        {/* CLEAR ALL */}
+
+                        <label className="flex items-center gap-2 cursor-pointer">
+
+                            <input
+                                type="checkbox"
+                                checked={clearAll}
+                                onChange={(e) => {
+
+                                    const checked = e.target.checked;
+
+                                    setClearAll(checked);
+
+                                    if (checked) {
+
+                                        const updatedItems = items.map(item => ({
+                                            ...item,
+                                            returnQty: 0
+                                        }));
+
+                                        setItems(updatedItems);
+
+                                        setReturnAll(false);
+
+                                        setTimeout(() => {
+                                            setClearAll(false);
+                                        }, 300);
+                                    }
+                                }}
+                                className="w-3.5 h-3.5 accent-red-500"
+                            />
+
+                            <span className="text-[10px] font-bold uppercase text-red-600 tracking-wide">
+                                Clear All
+                            </span>
+
+                        </label>
+
+                    </div>
+
+                    {/* BODY */}
+
+                    <div className="grid grid-cols-12 gap-0">
+
+                        {/* ROW 1: Identity */}
+
+                        <div className="col-span-12 md:col-span-2 p-4 border-r border-b border-amber-200/50 bg-slate-50/30">
+
+                            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">
+                                Customer ID
+                            </label>
+
                             <div className="relative">
+
+                                <input
+                                    type="text"
+                                    className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white outline-none shadow-sm transition-all"
+                                    placeholder="CUST-001"
+                                />
+
+                                <Hash
+                                    size={14}
+                                    className="absolute left-2.5 top-3 text-slate-400"
+                                />
+
+                            </div>
+
+                        </div>
+
+                        {/* CUSTOMER NAME */}
+
+                        <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-amber-200/50">
+
+                            <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">
+                                Customer Name
+                            </label>
+
+                            <div className="relative">
+
                                 <input
                                     type="text"
                                     className="w-full border border-amber-200 rounded-md p-2 pl-8 bg-white focus:ring-2 focus:ring-blue-400 outline-none shadow-sm transition-all font-bold"
@@ -468,28 +586,63 @@ const BillingReturnV4 = () => {
                                         setCustomerSearch(e.target.value);
                                         searchCustomers(e.target.value);
                                     }}
-                                    onFocus={() => customerSuggestions.length > 0 && setShowCustomerDropdown(true)}
-                                    onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                                    onFocus={() =>
+                                        customerSuggestions.length > 0 &&
+                                        setShowCustomerDropdown(true)
+                                    }
+                                    onBlur={() =>
+                                        setTimeout(
+                                            () =>
+                                                setShowCustomerDropdown(false),
+                                            200
+                                        )
+                                    }
                                 />
-                                <User size={14} className="absolute left-2.5 top-3 text-slate-400" />
-                                {showCustomerDropdown && customerSuggestions.length > 0 && (
-                                    <div className="absolute z-10 w-full bg-white border border-amber-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-1">
-                                        {customerSuggestions.map((customer, index) => (
-                                            <div
-                                                key={index}
-                                                className="p-2 hover:bg-amber-50 cursor-pointer border-b border-amber-100 last:border-b-0"
-                                                onClick={() => selectCustomer(customer)}
-                                            >
-                                                <div className="font-bold">{customer.customerName}</div>
-                                                <div className="text-sm text-slate-500">{customer.gstin} - {customer.state}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+
+                                <User
+                                    size={14}
+                                    className="absolute left-2.5 top-3 text-slate-400"
+                                />
+
+                                {
+                                    showCustomerDropdown &&
+                                    customerSuggestions.length > 0 && (
+
+                                        <div className="absolute z-10 w-full bg-white border border-amber-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-1">
+
+                                            {
+                                                customerSuggestions.map((customer, index) => (
+
+                                                    <div
+                                                        key={index}
+                                                        className="p-2 hover:bg-amber-50 cursor-pointer border-b border-amber-100 last:border-b-0"
+                                                        onClick={() =>
+                                                            selectCustomer(customer)
+                                                        }
+                                                    >
+
+                                                        <div className="font-bold">
+                                                            {customer.customerName}
+                                                        </div>
+
+                                                        <div className="text-sm text-slate-500">
+                                                            {customer.gstin} - {customer.state}
+                                                        </div>
+
+                                                    </div>
+                                                ))
+                                            }
+
+                                        </div>
+                                    )
+                                }
+
                             </div>
+
                         </div>
 
                     </div>
+
                 </div>
 
                 {/* ITEM GRID SECTION */}
@@ -599,7 +752,7 @@ const BillingReturnV4 = () => {
                                         <td className="p-3 text-right text-slate-400 font-poppins text-[12px] border-r border-slate-200/50">
                                             {item.grossAmount ? item.grossAmount.toFixed(2) : "0.00"}
                                         </td>
-                                        
+
 
                                         {/* Discount % */}
                                         <td className="p-1 border-r border-slate-200/50">

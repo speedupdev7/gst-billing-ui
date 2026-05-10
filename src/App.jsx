@@ -85,6 +85,17 @@ import BillingReturnV4 from "./components/billingreturn/BillingReturnV4";
 // Billing Settlement Screen
 import BillingV4Settlement from "./components/settelment/BillingV4Settelment";
 
+// Inventory Screens
+import OpeningStock from "./components/inventory/OpeningStock";
+import StockExpiry from "./components/inventory/StockExpiry";
+import StockOrder from "./components/inventory/StockOrder";
+import StockTransfer from "./components/inventory/StockTransfer";
+
+// Inventory Forms
+import OpeningStockForm from "./components/inventoryForms/OpeningStockForm";
+import StockExpiryForm from "./components/inventoryForms/StockExpiryForm";
+import StockOrderForm from "./components/inventoryForms/StockOrderFom";
+import StockTransferForm from "./components/inventoryForms/StockTransferForm";
 // Transactions
 import BillingTransaction from "./components/transactions/BillingTransactions";
 import PurchaseTransaction from "./components/transactions/PurchaseTransactions";
@@ -215,6 +226,18 @@ export default function App() {
 
                   {/* Billing Settlement  */}
                 <Route path="/billing-settlement-v4" element={<BillingV4Settlement />} />
+
+               {/* Inventory */}
+                <Route path="opening-stock" element={<OpeningStock />} />
+                <Route path="stock-expiry" element={<StockExpiry />} />
+                <Route path="stock-order" element={<StockOrder />} />
+                <Route path="stock-transfer" element={<StockTransfer />} />
+
+                {/* Inventory Forms */}
+                <Route path="opening-stock-form" element={<OpeningStockForm />} />
+                <Route path="stock-expiry-form" element={<StockExpiryForm />} />
+                <Route path="stock-order-form" element={<StockOrderForm />} />
+                <Route path="stock-transfer-form" element={<StockTransferForm />} />
 
                 {/* Transactions */}
                 <Route path="bill-transaction" element={<BillingTransaction />} />

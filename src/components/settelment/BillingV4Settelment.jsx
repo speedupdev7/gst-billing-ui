@@ -319,7 +319,7 @@ const SettlementV1 = () => {
                                         <input
                                             type="number"
                                             className="w-full bg-red-50/50 border border-red-100 rounded-lg py-2 text-center font-bold text-red-600 outline-none"
-                                            value={Number(item.paidAmount || 0).toFixed(2)}
+                                            value={Number(item.settlementAmount || 0).toFixed(2)}
                                             onChange={(e) =>
                                                 handleItemChange(
                                                     idx,
@@ -334,7 +334,7 @@ const SettlementV1 = () => {
                                         <input
                                             type="number"
                                             className="w-full bg-yellow-50/50 border border-yellow-100 rounded-lg py-2 text-center font-bold text-yellow-700 outline-none"
-                                            value={Number(item.paidAmount || 0).toFixed(2)}
+                                            value={Number(item.settlementAmount || 0).toFixed(2)}
                                             onChange={(e) =>
                                                 handleItemChange(
                                                     idx,

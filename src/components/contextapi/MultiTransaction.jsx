@@ -193,35 +193,128 @@ const MultiTransaction = ({
                                     <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Bill Summary</h4>
                                     <div className="space-y-1.5">
                                         {(() => {
-                                            const invoiceTotal = totals.invoiceTotal || 0;
-                                            const totalPaid = Object.entries(paymentSplit).reduce((sum, [id, val]) => {
-                                                const method = activeMethods.find(m => m.id === id);
-                                                const numVal = parseFloat(val) || 0;
-                                                if (method?.type === 'Discount' && discountMode[id] === 'percent') {
-                                                    return sum + (invoiceTotal * (numVal / 100));
-                                                }
-                                                return sum + numVal;
-                                            }, 0);
-                                            const outstanding = Math.max(0, invoiceTotal - totalPaid);
+
+                                            const invoiceTotal =
+                                                totals.invoiceTotal || 0;
+
+                                            // TOTAL DISCOUNT
+                                            const totalDiscount =
+                                                Object.entries(paymentSplit).reduce(
+                                                    (sum, [id, val]) => {
+
+                                                        const method =
+                                                            activeMethods.find(
+                                                                m => m.id === id
+                                                            );
+
+                                                        if (method?.type === "Discount") {
+
+                                                            const numVal =
+                                                                parseFloat(val) || 0;
+
+                                                            if (
+                                                                discountMode[id] === "percent"
+                                                            ) {
+
+                                                                return (
+                                                                    sum +
+                                                                    (
+                                                                        invoiceTotal *
+                                                                        (numVal / 100)
+                                                                    )
+                                                                );
+                                                            }
+
+                                                            return sum + numVal;
+                                                        }
+
+                                                        return sum;
+
+                                                    }, 0
+                                                );
+
+                                            // TOTAL PAID (WITHOUT DISCOUNT)
+                                            const totalPaid =
+                                                Object.entries(paymentSplit).reduce(
+                                                    (sum, [id, val]) => {
+
+                                                        const method =
+                                                            activeMethods.find(
+                                                                m => m.id === id
+                                                            );
+
+                                                        if (
+                                                            method?.type !== "Discount"
+                                                        ) {
+
+                                                            return (
+                                                                sum +
+                                                                (parseFloat(val) || 0)
+                                                            );
+                                                        }
+
+                                                        return sum;
+
+                                                    }, 0
+                                                );
+
+                                            // TOTAL PAYABLE
+                                            const totalPayable =
+                                                invoiceTotal - totalDiscount;
+
+                                            // OUTSTANDING
+                                            const outstanding =
+                                                Math.max(
+                                                    0,
+                                                    totalPayable - totalPaid
+                                                );
 
                                             return (
                                                 <>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-medium text-slate-500">Total Invoice</span>
-                                                        <span className="text-[11px] font-bold text-slate-700">₹{invoiceTotal.toLocaleString('en-IN')}</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-medium text-slate-500">Total Paid</span>
-                                                        <span className="text-[11px] font-bold text-emerald-600">₹{totalPaid.toLocaleString('en-IN')}</span>
-                                                    </div>
-                                                    <div className="pt-2 mt-1 border-t border-slate-200 flex justify-between items-center">
-                                                        <span className="text-[10px] font-bold text-slate-600 uppercase">Outstanding</span>
-                                                        <span className={`text-sm font-black ${outstanding > 0.01 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                                                            ₹{outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        <span className="text-[10px] font-medium text-slate-500">
+                                                            Total Invoice
+                                                        </span>
+
+                                                        <span className="text-[11px] font-bold text-slate-700">
+                                                            ₹{invoiceTotal.toLocaleString("en-IN")}
                                                         </span>
                                                     </div>
+
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-medium text-slate-500">
+                                                            Total Discount
+                                                        </span>
+
+                                                        <span className="text-[11px] font-bold text-rose-600">
+                                                            ₹{totalDiscount.toLocaleString("en-IN")}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-medium text-slate-500">
+                                                            Total Payable
+                                                        </span>
+
+                                                        <span className="text-[11px] font-bold text-indigo-600">
+                                                            ₹{totalPayable.toLocaleString("en-IN")}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-medium text-slate-500">
+                                                            Total Paid
+                                                        </span>
+
+                                                        <span className="text-[11px] font-bold text-emerald-600">
+                                                            ₹{totalPaid.toLocaleString("en-IN")}
+                                                        </span>
+                                                    </div>
+
+                                                    
                                                 </>
                                             );
+
                                         })()}
                                     </div>
                                 </section>
@@ -357,13 +450,9 @@ const MultiTransaction = ({
                                     <div className="max-w-4xl mx-auto w-full">
                                         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                                             <div className="flex items-center gap-8 lg:gap-12">
-                                                {/* <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Total Paid</p>
-                                                    <p className="text-xl lg:text-2xl font-black text-slate-900 tabular-nums">₹{totalPaid.toLocaleString('en-IN')}</p>
-                                                </div> */}
-                                                <div className="h-10 w-px bg-slate-200 hidden sm:block" />
+                                               
                                                 <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Remaining</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Outstanding</p>
                                                     <p className={`text-xl lg:text-2xl font-black tabular-nums ${remaining <= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                                                         ₹{Math.max(0, remaining).toLocaleString('en-IN', {
                                                             minimumFractionDigits: 2,
