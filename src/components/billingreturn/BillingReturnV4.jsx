@@ -3,11 +3,13 @@ import { Save, Printer, Mail, Send, Truck, XCircle, Plus, Trash2, MapPin, FileTe
 import DatePicker from "react-datepicker";
 import KeyboardReturnIcon from '@mui/icons-material/KeyboardReturn';
 import { usePayment } from "../contextapi/PaymentContext";
+import { useToast } from "../contextapi/ToastContext";
 import MultiTransaction from "../contextapi/MultiTransaction";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from 'axios';
 const BillingReturnV4 = () => {
     const [paymentMode, setPaymentMode] = useState('');
+    const toast = useToast();
     const [invoiceDate, setInvoiceDate] = useState(new Date());
     const [invoiceTime, setInvoiceTime] = useState(new Date());
     const [customerSearch, setCustomerSearch] = useState('');
@@ -31,6 +33,16 @@ const BillingReturnV4 = () => {
     const { showPaymentModal, setShowPaymentModal } = usePayment();
     // Add this at the top of your component
     const [editingId, setEditingId] = useState(null);
+
+    // Return history and submission states
+    const [returnHistory, setReturnHistory] = useState([]);
+    const [isLoadingReturns, setIsLoadingReturns] = useState(false);
+    const [returnReasonCode, setReturnReasonCode] = useState('DEFECT');
+    const [returnReasonText, setReturnReasonText] = useState('');
+    const [returnRemarks, setReturnRemarks] = useState('');
+    const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+    const [originalInvoiceData, setOriginalInvoiceData] = useState(null);
+    const [loadedInvoiceNo, setLoadedInvoiceNo] = useState(null);
 
     const toggleEdit = (id) => {
         // If clicking the same button twice, it closes (disables) the row
@@ -312,7 +324,11 @@ const BillingReturnV4 = () => {
             setCustomerSearch(customerName);
             setShowCustomerDropdown(false);
 
-            setInvoiceNo(data.invoiceNo || invNo);
+            const apiInvoiceNo = data.invoiceNo || invNo;
+            setInvoiceNo(apiInvoiceNo);
+            setLoadedInvoiceNo(apiInvoiceNo);
+            console.log('Loaded invoice:', apiInvoiceNo);
+
             if (data.invoiceDate) {
                 setInvoiceDate(new Date(data.invoiceDate));
             }
@@ -327,10 +343,12 @@ const BillingReturnV4 = () => {
             const invoiceItems = data.invoiceItems || data.items || [];
             const mappedItems = invoiceItems.map((item) => ({
                 id: Date.now() + Math.random(),
+                invoiceItemId: item.invoiceItemId || item.id || item.lineItemId,
                 itemId: item.itemId,
                 itemName: item.itemName || item.item?.itemName || "",
                 itemNameDetails: item.itemNameDetails || item.item?.description || "",
                 batch: item.batchCode || item.batch || "",
+                hsn: item.hsnCode || item.hsn || "0000",
                 rate: item.rate ?? 0,
                 qty: item.quantity ?? item.qty ?? 0,
                 returnQty: 0,
@@ -354,9 +372,121 @@ const BillingReturnV4 = () => {
                 }));
             }
 
+            // Store original invoice data for later calculations
+            setOriginalInvoiceData(data);
+
+            // Fetch return history for this invoice using the API response invoiceNo
+            fetchReturnHistory(apiInvoiceNo);
+
         } catch (err) {
             console.log("ERROR:", err.response?.data || err.message);
         }
+    };
+
+    const fetchReturnHistory = async (invNo) => {
+        try {
+            setIsLoadingReturns(true);
+            const response = await axios.get(`/api/invoice/${encodeURIComponent(invNo)}/returns`);
+            const returns = response.data?.data || response.data || [];
+            setReturnHistory(Array.isArray(returns) ? returns : []);
+        } catch (err) {
+            console.log("ERROR fetching return history:", err.response?.data || err.message);
+            setReturnHistory([]);
+        } finally {
+            setIsLoadingReturns(false);
+        }
+    };
+
+    const submitReturn = async () => {
+        try {
+            const invoiceNumberToUse = loadedInvoiceNo || invoiceNo;
+            console.log('Submitting return for invoice:', invoiceNumberToUse);
+            
+            if (!invoiceNumberToUse) {
+                toast.error('Invoice number is required. Please load an invoice first.');
+                return;
+            }
+
+            const returnItemLines = items
+                .filter(item => item.returnQty > 0)
+                .map(item => ({
+                    invoiceItemId: item.invoiceItemId || item.itemId,
+                    itemId: item.itemId,
+                    batchCode: item.batch || 'BATCH01',
+                    hsnCode: item.hsn || '0000',
+                    quantity: item.returnQty,
+                    rate: item.rate,
+                    grossAmount: item.rate * item.returnQty,
+                    discountPct: item.discP,
+                    discountAmt: (item.rate * item.returnQty * item.discP) / 100,
+                    taxableAmount: ((item.rate * item.returnQty) * (1 - item.discP / 100)),
+                    gstRate: item.gstP,
+                    cgstAmt: (((item.rate * item.returnQty) * (1 - item.discP / 100)) * item.gstP / 100) / 2,
+                    sgstAmt: (((item.rate * item.returnQty) * (1 - item.discP / 100)) * item.gstP / 100) / 2,
+                    igstAmt: 0,
+                    lineTotal: ((item.rate * item.returnQty) * (1 - item.discP / 100)) * (1 + item.gstP / 100),
+                }));
+
+            if (returnItemLines.length === 0) {
+                toast.error('Please select items to return');
+                return;
+            }
+
+            const returnPayload = {
+                invoiceNo: invoiceNumberToUse,
+                returnNo: `RTN-${new Date().getFullYear()}-${Date.now()}`,
+                returnDate: new Date().toISOString().split('T')[0],
+                returnType: 'RETURN',
+                reasonCode: returnReasonCode,
+                reasonText: returnReasonText,
+                remarks: returnRemarks,
+                items: returnItemLines,
+            };
+
+            setIsSubmittingReturn(true);
+            const endpoint = `/api/invoice/returns`;
+            console.log('Calling endpoint:', endpoint);
+            
+            const response = await axios.post(
+                endpoint,
+                returnPayload
+            );
+
+            if (response.status === 200 || response.status === 201) {
+                toast.success('Return submitted successfully!');
+                console.log('Return submitted:', response.data);
+
+                // Reset return form
+                setReturnReasonCode('DEFECT');
+                setReturnReasonText('');
+                setReturnRemarks('');
+                const resetItems = items.map(item => ({ ...item, returnQty: 0 }));
+                setItems(calculateTotals(resetItems));
+                setReturnAll(false);
+
+                // Refresh return history
+                fetchReturnHistory(invoiceNumberToUse);
+            }
+        } catch (err) {
+            console.error('Error submitting return:', err);
+            toast.error(`Error submitting return: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsSubmittingReturn(false);
+        }
+    };
+
+    // Calculate available quantity (original - returned)
+    const getAvailableQuantity = (itemId) => {
+        if (!originalInvoiceData?.items) return 0;
+        const origItem = originalInvoiceData.items.find(i => i.itemId === itemId);
+        if (!origItem) return 0;
+
+        const totalReturned = (returnHistory || []).reduce((sum, ret) => {
+            const returnedItem = ret.items?.find(i => i.itemId === itemId);
+            return sum + (returnedItem?.quantity || 0);
+        }, 0);
+
+        return (origItem.quantity || 0) - totalReturned;
     };
     // Return QTY table logic
     const adjustmentList = items.filter(item => item.returnQty > 0);
@@ -684,6 +814,7 @@ const BillingReturnV4 = () => {
                             {/* Editable Sections: Muted Slate backgrounds to signify "Input Areas" */}
                             <th className="p-4 w-32 text-center text-slate-200 bg-slate-800/40">Rate</th>
                             <th className="p-4 w-20 text-center text-slate-200 bg-slate-800/40">Qty</th>
+                            <th className="p-4 w-20 text-center text-blue-300">Avail Qty</th>
                             <th className="p-4 w-28 text-center text-rose-300">Return QTY</th>
 
                             <th className="p-4 w-32 text-center opacity-60">Gross Amt</th>
@@ -751,6 +882,10 @@ const BillingReturnV4 = () => {
                                             />
                                         </td>
 
+                                        <td className="p-3 text-right font-mono font-bold text-blue-600 text-[12px] border-r border-slate-200/50 bg-blue-50/20">
+                                            {getAvailableQuantity(item.itemId) || item.qty}
+                                        </td>
+
                                         <td className="p-1 border-r border-slate-200/50 bg-rose-50/20">
                                             <input
                                                 className={`w-full bg-transparent border-none text-right text-[14px] font-mono font-black transition-all outline-none pr-3 
@@ -762,8 +897,9 @@ const BillingReturnV4 = () => {
                                                 value={item.returnQty === 0 ? '' : item.returnQty}
                                                 onChange={(e) => {
                                                     let val = Number(e.target.value);
+                                                    const availableQty = getAvailableQuantity(item.itemId);
                                                     if (val < 0) val = 0;
-                                                    if (val > item.qty) val = item.qty;
+                                                    if (val > availableQty) val = availableQty;
                                                     handleItemChange(idx, 'returnQty', val);
                                                 }}
                                             />
@@ -1134,6 +1270,69 @@ const BillingReturnV4 = () => {
                         </div>
                     </div>
                 )}
+                {/* RETURN REASON SECTION */}
+                <div className="grid grid-cols-12 border-b border-amber-200/50 bg-rose-50/20">
+                    <div className="col-span-12 md:col-span-3 p-4 border-r border-amber-200/50">
+                        <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Return Reason Code</label>
+                        <select
+                            className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm"
+                            value={returnReasonCode}
+                            onChange={(e) => setReturnReasonCode(e.target.value)}
+                        >
+                            <option value="DEFECT">Defect</option>
+                            <option value="DAMAGE">Damage</option>
+                            <option value="EXPIRY">Expiry</option>
+                            <option value="QUALITY">Quality Issue</option>
+                            <option value="EXCESS">Excess Stock</option>
+                            <option value="WRONG_ITEM">Wrong Item</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-4 p-4 border-r border-amber-200/50">
+                        <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Return Reason Description</label>
+                        <input
+                            type="text"
+                            className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm"
+                            placeholder="Detailed reason for return..."
+                            value={returnReasonText}
+                            onChange={(e) => setReturnReasonText(e.target.value)}
+                        />
+                    </div>
+                    <div className="col-span-12 md:col-span-5 p-4">
+                        <label className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]">Return Remarks</label>
+                        <input
+                            type="text"
+                            className="w-full border border-amber-200 rounded-md p-2 bg-white outline-none shadow-sm"
+                            placeholder="Additional remarks..."
+                            value={returnRemarks}
+                            onChange={(e) => setReturnRemarks(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                {/* Return History Display */}
+                {returnHistory && returnHistory.length > 0 && (
+                    <div className="grid grid-cols-12 border-b border-slate-200 bg-blue-50/30">
+                        <div className="col-span-12 p-4">
+                            <h3 className="font-bold text-slate-700 mb-3 text-sm uppercase">Return History</h3>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {returnHistory.map((ret, idx) => (
+                                    <div key={idx} className="bg-white p-3 rounded-lg border border-blue-100 text-xs">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <span className="font-bold text-slate-700">{ret.returnNo}</span>
+                                                <span className="text-slate-500 ml-2">{ret.returnDate}</span>
+                                            </div>
+                                            <span className="text-blue-600 font-bold">{ret.reasonCode}</span>
+                                        </div>
+                                        <div className="text-slate-600 mt-1">{ret.reasonText}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div class="grid grid-cols-12 border-b border-amber-200/50">
 
                     <div class="col-span-12 md:col-span-6 p-4 border-r border-amber-200/50">
@@ -1176,11 +1375,12 @@ const BillingReturnV4 = () => {
 
                     {/* PRIMARY ACTION: SAVE */}
                     <button
-                        className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30"
-                        onClick={saveInvoice}
+                        className="flex items-center gap-2.5 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-blue-900/40 active:scale-95 border-t border-blue-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={submitReturn}
+                        disabled={isSubmittingReturn}
                     >
                         <Save size={16} strokeWidth={2.5} />
-                        Save Invoice
+                        {isSubmittingReturn ? 'Submitting...' : 'Submit Return'}
                     </button>
 
                     {/* SECONDARY ACTION: PRINT */}
