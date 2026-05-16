@@ -974,24 +974,83 @@ const BillingV4List = () => {
                 <div className="bv4-table-wrap">
                     <table className="bv4-table">
                         <thead>
-                            <tr>
-                               
-                                <th style={{ width: 120, textAlign: 'center' }}>Actions</th>
-                                <th>Invoice No</th>
-                                <th>Date</th>
-                                <th>Customer</th>
-                                <th className="r">Total Amount</th>
-                                <th className="r">Paid</th>
-                                <th className="r">Pending</th>
-                                <th className="c">Status</th>
+                            <tr className="bg-indigo-50/20 border-b border-indigo-100">
+
+                                {/* SR NO */}
+
+
+
+                                {/* ACTIONS */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase w-40 text-center">
+                                    Actions
+                                </th>
+
+                                {/* INVOICE NO */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Inv No
+                                </th>
+
+                                {/* INVOICE DATE */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Inv Date
+                                </th>
+
+                                {/* CUSTOMER NAME */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase">
+                                    Customer Name
+                                </th>
+
+                                {/* TOTAL PAID */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
+                                    Total Paid
+                                </th>
+
+                                {/* PENDING AMOUNT */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
+                                    Pending Amount
+                                </th>
+
+                                {/* STATUS */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-center">
+                                    Status
+                                </th>
+
                             </tr>
                         </thead>
-                        <tbody>
-                            {filteredInvoices.length > 0 ? filteredInvoices.map((inv, index) => {
-                                const billAmount = Number(inv.invoiceAmount || 0);
-                                const isPaid = inv.status?.toLowerCase() === "paid";
-                                const totalPaid = isPaid ? billAmount : 0;
-                                const pendingAmount = isPaid ? 0 : billAmount;
+
+                        <tbody className="divide-y divide-slate-100">
+
+                            {
+                                filteredInvoices.length > 0 ? (
+
+                                    filteredInvoices.map((inv, index) => {
+
+                                        const billAmount =
+                                            Number(inv.invoiceAmount || 0);
+
+                                        let pendingAmount = 0;
+                                        let totalPaid = 0;
+
+                                        if (
+                                            inv.status?.toLowerCase() === "paid"
+                                        ) {
+
+                                            totalPaid = billAmount;
+                                            pendingAmount = 0;
+
+                                        }
+                                        else {
+
+                                            pendingAmount = billAmount;
+                                            totalPaid = 0;
+                                        }
 
                                 return (
                                     <tr key={inv.balanceId || inv.invoiceId || index}>
@@ -1040,20 +1099,43 @@ const BillingV4List = () => {
                                             <div className="bv4-customer">{inv.unitName || "—"}</div>
                                         </td>
 
-                                        {/* Total */}
-                                        <td className="r">
-                                            <span className="bv4-amount">₹{fmtINR(billAmount)}</span>
-                                        </td>
+                                                {/* CUSTOMER NAME */}
 
-                                        {/* Paid */}
-                                        <td className="r">
-                                            <span className="bv4-amount green">₹{fmtINR(totalPaid)}</span>
-                                        </td>
+                                                <td className="px-6 py-2.5 text-xs font-semibold text-slate-700">
 
-                                        {/* Pending */}
-                                        <td className="r">
-                                            <span className="bv4-amount red">₹{fmtINR(pendingAmount)}</span>
-                                        </td>
+                                                    {inv.unitName || "N/A"}
+
+                                                </td>
+
+                                                {/* TOTAL PAID */}
+
+                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-emerald-600">
+
+                                                    ₹{
+                                                        totalPaid.toLocaleString(
+                                                            "en-IN",
+                                                            {
+                                                                minimumFractionDigits: 2
+                                                            }
+                                                        )
+                                                    }
+
+                                                </td>
+
+                                                {/* PENDING AMOUNT */}
+
+                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-rose-500">
+
+                                                    ₹{
+                                                        pendingAmount.toLocaleString(
+                                                            "en-IN",
+                                                            {
+                                                                minimumFractionDigits: 2
+                                                            }
+                                                        )
+                                                    }
+
+                                                </td>
 
                                         {/* Status */}
                                         <td className="c">
