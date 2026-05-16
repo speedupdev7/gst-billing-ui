@@ -1026,137 +1026,161 @@ const BillingV4List = () => {
                         </thead>
 
                         <tbody className="divide-y divide-slate-100">
+{
+    filteredInvoices.length > 0 ? (
 
-                            {
-                                filteredInvoices.length > 0 ? (
+        filteredInvoices.map((inv, index) => {
 
-                                    filteredInvoices.map((inv, index) => {
+            const billAmount = Number(inv.invoiceAmount || 0);
 
-                                        const billAmount =
-                                            Number(inv.invoiceAmount || 0);
+            let pendingAmount = 0;
+            let totalPaid = 0;
 
-                                        let pendingAmount = 0;
-                                        let totalPaid = 0;
+            if (inv.status?.toLowerCase() === "paid") {
+                totalPaid = billAmount;
+                pendingAmount = 0;
+            } else {
+                pendingAmount = billAmount;
+                totalPaid = 0;
+            }
 
-                                        if (
-                                            inv.status?.toLowerCase() === "paid"
-                                        ) {
+            return (
+                <tr key={inv.balanceId || inv.invoiceId || index}>
 
-                                            totalPaid = billAmount;
-                                            pendingAmount = 0;
+                    {/* Actions */}
+                    <td className="c">
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6
+                            }}
+                        >
+                            <button
+                                className="bv4-action-btn view"
+                                title="View Details"
+                                onClick={() => handleViewDetails(inv)}
+                            >
+                                <VisibilityIcon sx={{ fontSize: 14 }} />
+                            </button>
 
-                                        }
-                                        else {
+                            <button
+                                className="bv4-action-btn ret"
+                                title="Return Invoice"
+                                onClick={() =>
+                                    navigate("/billing-return-v4", {
+                                        state: { invoice: inv }
+                                    })
+                                }
+                            >
+                                <ChangeCircleIcon sx={{ fontSize: 16 }} />
+                            </button>
 
-                                            pendingAmount = billAmount;
-                                            totalPaid = 0;
-                                        }
+                            <button
+                                className="bv4-action-btn del"
+                                title="Delete Invoice"
+                                onClick={() =>
+                                    openDeleteModal(inv.invoiceId || inv.balanceId)
+                                }
+                            >
+                                <DeleteIcon sx={{ fontSize: 14 }} />
+                            </button>
+                        </div>
+                    </td>
 
-                                return (
-                                    <tr key={inv.balanceId || inv.invoiceId || index}>
-                                        {/* # */}
-                                      
+                    {/* Invoice No */}
+                    <td>
+                        <span className="bv4-inv-no">
+                            #{inv.invoiceNo || "N/A"}
+                        </span>
+                    </td>
 
-                                        {/* Actions */}
-                                        <td className="c">
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <button
-                                                    className="bv4-action-btn view"
-                                                    title="View Details"
-                                                    onClick={() => handleViewDetails(inv)}
-                                                >
-                                                    <VisibilityIcon sx={{ fontSize: 14 }} />
-                                                </button>
-                                                <button
-                                                    className="bv4-action-btn ret"
-                                                    title="Return Invoice"
-                                                    onClick={() => navigate("/billing-return-v4", { state: { invoice: inv } })}
-                                                >
-                                                    <ChangeCircleIcon sx={{ fontSize: 16 }} />
-                                                </button>
-                                                <button
-                                                    className="bv4-action-btn del"
-                                                    title="Delete Invoice"
-                                                    onClick={() => openDeleteModal(inv.invoiceId || inv.balanceId)}
-                                                >
-                                                    <DeleteIcon sx={{ fontSize: 14 }} />
-                                                </button>
-                                            </div>
-                                        </td>
+                    {/* Date */}
+                    <td
+                        style={{
+                            color: 'var(--ink-3)',
+                            fontWeight: 500
+                        }}
+                    >
+                        {
+                            inv.invoiceDate
+                                ? inv.invoiceDate
+                                    .split("-")
+                                    .reverse()
+                                    .join("-")
+                                : "—"
+                        }
+                    </td>
 
-                                        {/* Invoice No */}
-                                        <td>
-                                            <span className="bv4-inv-no">#{inv.invoiceNo || "N/A"}</span>
-                                        </td>
+                    {/* Customer */}
+                    <td>
+                        <div className="bv4-customer">
+                            {inv.unitName || "—"}
+                        </div>
+                    </td>
 
-                                        {/* Date */}
-                                        <td style={{ color: 'var(--ink-3)', fontWeight: 500 }}>
-                                            {inv.invoiceDate ? inv.invoiceDate.split("-").reverse().join("-") : "—"}
-                                        </td>
+                    {/* Total Paid */}
+                    <td className="px-6 py-2.5 text-right text-xs font-bold text-emerald-600">
+                        ₹{
+                            totalPaid.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2
+                            })
+                        }
+                    </td>
 
-                                        {/* Customer */}
-                                        <td>
-                                            <div className="bv4-customer">{inv.unitName || "—"}</div>
-                                        </td>
+                    {/* Pending Amount */}
+                    <td className="px-6 py-2.5 text-right text-xs font-bold text-rose-500">
+                        ₹{
+                            pendingAmount.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2
+                            })
+                        }
+                    </td>
 
-                                                {/* CUSTOMER NAME */}
+                    {/* Status */}
+                    <td className="c">
+                        {renderStatus(inv.status, inv)}
+                    </td>
 
-                                                <td className="px-6 py-2.5 text-xs font-semibold text-slate-700">
+                </tr>
+            );
+        })
 
-                                                    {inv.unitName || "N/A"}
+    ) : (
 
-                                                </td>
+        <tr>
+            <td colSpan="7">
+                <div className="bv4-empty">
+                    <div className="bv4-empty-icon">
+                        <FileText size={24} />
+                    </div>
 
-                                                {/* TOTAL PAID */}
+                    <p
+                        style={{
+                            margin: '0 0 6px',
+                            fontWeight: 600,
+                            color: 'var(--ink-3)'
+                        }}
+                    >
+                        No invoices found
+                    </p>
 
-                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-emerald-600">
+                    <p
+                        style={{
+                            margin: 0,
+                            fontSize: 11
+                        }}
+                    >
+                        Try adjusting your search or date filters.
+                    </p>
+                </div>
+            </td>
+        </tr>
 
-                                                    ₹{
-                                                        totalPaid.toLocaleString(
-                                                            "en-IN",
-                                                            {
-                                                                minimumFractionDigits: 2
-                                                            }
-                                                        )
-                                                    }
-
-                                                </td>
-
-                                                {/* PENDING AMOUNT */}
-
-                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-rose-500">
-
-                                                    ₹{
-                                                        pendingAmount.toLocaleString(
-                                                            "en-IN",
-                                                            {
-                                                                minimumFractionDigits: 2
-                                                            }
-                                                        )
-                                                    }
-
-                                                </td>
-
-                                        {/* Status */}
-                                        <td className="c">
-                                            {renderStatus(inv.status, inv)}
-                                        </td>
-                                    </tr>
-                                );
-                            }) : (
-                                <tr>
-                                    <td colSpan="9">
-                                        <div className="bv4-empty">
-                                            <div className="bv4-empty-icon">
-                                                <FileText size={24} />
-                                            </div>
-                                            <p style={{ margin: '0 0 6px', fontWeight: 600, color: 'var(--ink-3)' }}>No invoices found</p>
-                                            <p style={{ margin: 0, fontSize: 11 }}>Try adjusting your search or date filters.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
+    )
+}
+</tbody>
                     </table>
                 </div>
 
