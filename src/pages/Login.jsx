@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { HiOutlineEye, HiOutlineEyeOff } from "react-icons/hi";
-import LoginIllustration from "../assets/LoginBackground.png";
+// import LoginIllustration from "../assets/LoginBackground.png";
 import logoimage from "../assets/logoimage.png";
 
 const LoginPage = () => {

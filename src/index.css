@@ -10,6 +10,14 @@ body {
   --font-poppins: "Poppins", sans-serif;
 }
 
+/* html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+} */
 /* .header-label {
   @apply text-slate-500 font-bold uppercase block mb-1.5 text-[10px];
 }
@@ -121,6 +129,4 @@ html.dark body {
   background-color: #0f172a; /* Same as slate-900 */
   color: #f8fafc;            /* Same as slate-50 */
 }
-
-
 

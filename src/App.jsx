@@ -128,6 +128,9 @@ import { ExportProvider } from "./components/contextapi/ExportContext";
 import { ActionProvider } from "./components/contextapi/ActionsContext";
 import { PaymentProvider } from "./components/contextapi/PaymentContext";
 
+import InvoicePrint from
+"./components/contextapi/print/InvoicePrint";
+
 
 
 
@@ -137,6 +140,7 @@ export default function App() {
     <ToastProvider>
       {/* ExportProvider: Excel / PDF / Print logic share karega */}
       <ExportProvider>
+        
         {/* ActionProvider: view / edit / delete jaise common actions share karega */}
         <ActionProvider>
           <PaymentProvider>
@@ -276,6 +280,7 @@ export default function App() {
           </Routes>
           </PaymentProvider>
         </ActionProvider>
+        
       </ExportProvider>
     </ToastProvider>
   );

@@ -5,9 +5,13 @@ import KeyboardReturnIcon from '@mui/icons-material/KeyboardReturn';
 import { usePayment } from "../contextapi/PaymentContext";
 import { useToast } from "../contextapi/ToastContext";
 import MultiTransaction from "../contextapi/MultiTransaction";
+import { useLocation } from "react-router-dom";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from 'axios';
 const BillingReturnV4 = () => {
+    const location = useLocation();
+    const invoiceFromList = location.state?.invoice;
+    
     const [paymentMode, setPaymentMode] = useState('');
     const toast = useToast();
     const [invoiceDate, setInvoiceDate] = useState(new Date());
@@ -396,6 +400,13 @@ const BillingReturnV4 = () => {
             setIsLoadingReturns(false);
         }
     };
+
+    // Load invoice data when component mounts if passed from list
+    useEffect(() => {
+        if (invoiceFromList?.invoiceNo) {
+            getInvoiceByNumber(invoiceFromList.invoiceNo);
+        }
+    }, [invoiceFromList]);
 
     const submitReturn = async () => {
         try {
