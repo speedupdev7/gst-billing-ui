@@ -295,6 +295,12 @@ const BillingV4List = () => {
                                     Customer Name
                                 </th>
 
+                                {/* INVOICE AMOUNT */}
+
+                                <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
+                                    Invoice Amount
+                                </th>
+
                                 {/* TOTAL PAID */}
 
                                 <th className="px-6 py-3 text-[10px] font-semibold text-indigo-900/50 uppercase text-right">
@@ -323,25 +329,12 @@ const BillingV4List = () => {
 
                                     filteredInvoices.map((inv, index) => {
 
-                                        const billAmount =
-                                            Number(inv.invoiceAmount || 0);
+                                        const billAmount = Number(inv.invoiceAmount || 0);
+                                        const totalPaid = Number(inv.paidAmount ?? 0);
+                                        const pendingAmount = Number(inv.pendingAmount ?? 0);
 
-                                        let pendingAmount = 0;
-                                        let totalPaid = 0;
-
-                                        if (
-                                            inv.status?.toLowerCase() === "paid"
-                                        ) {
-
-                                            totalPaid = billAmount;
-                                            pendingAmount = 0;
-
-                                        }
-                                        else {
-
-                                            pendingAmount = billAmount;
-                                            totalPaid = 0;
-                                        }
+                                        const displayPaid = totalPaid || (inv.status?.toLowerCase() === "paid" ? billAmount : 0);
+                                        const displayPending = pendingAmount || (inv.status?.toLowerCase() === "paid" ? 0 : billAmount);
 
                                         return (
 
@@ -429,12 +422,20 @@ const BillingV4List = () => {
 
                                                 </td>
 
+                                                {/* INVOICE AMOUNT */}
+
+                                                <td className="px-6 py-2.5 text-right text-xs font-bold text-slate-700">
+
+                                                    ₹{Number(inv.invoiceAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+
+                                                </td>
+
                                                 {/* TOTAL PAID */}
 
                                                 <td className="px-6 py-2.5 text-right text-xs font-bold text-emerald-600">
 
                                                     ₹{
-                                                        totalPaid.toLocaleString(
+                                                        displayPaid.toLocaleString(
                                                             "en-IN",
                                                             {
                                                                 minimumFractionDigits: 2
@@ -449,7 +450,7 @@ const BillingV4List = () => {
                                                 <td className="px-6 py-2.5 text-right text-xs font-bold text-rose-500">
 
                                                     ₹{
-                                                        pendingAmount.toLocaleString(
+                                                        displayPending.toLocaleString(
                                                             "en-IN",
                                                             {
                                                                 minimumFractionDigits: 2
