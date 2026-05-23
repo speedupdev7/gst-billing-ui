@@ -1116,7 +1116,7 @@ const BillingV4List = () => {
                     {/* Customer */}
                     <td>
                         <div className="bv4-customer">
-                            {inv.unitName || "—"}
+                            {inv.customerName || "—"}
                         </div>
                     </td>
 
