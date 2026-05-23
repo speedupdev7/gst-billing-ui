@@ -64,10 +64,14 @@ import CountryMasterList from "./components/masterslist/CountryMasterList";
 
 // Invoces
 
-// Purchase List
+// Purchase 
 import AssetPurchase from "./components/purchase/AssetPurchase";
 import PurchaseReturn from "./components/purchase/PurchaseReturn";
 import PurchaseStock from "./components/purchase/PurchaseStock"
+
+// Purchase Lists
+import PurchaseStockList from "./components/purchase/PurchaseStockList"; 
+import PurchaseReturnList from "./components/purchase/PurchaseReturnList"; 
 
 // Billing 
 import Billing from "./components/billing/Billing";
@@ -77,10 +81,13 @@ import BillingV3 from "./components/billing/BillingV3";
 import BillingV4 from "./components/billing/BillingV4";
 
 // Billing Invoice List
-import BillingV4List from "./components/billingInvoiceList/BillingV4List";
+import BillingV4List from "./components/billing/billingInvoiceList/BillingV4List";
 
 // Billing Return List
 import BillingReturnV4 from "./components/billingreturn/BillingReturnV4";
+
+// BillingV4 return list
+import BillingReturnV4List from "./components/billingreturn/BillingReturnV4List";
 
 // Billing Settlement Screen
 import BillingV4Settlement from "./components/settelment/BillingV4Settelment";
@@ -129,7 +136,7 @@ import { ActionProvider } from "./components/contextapi/ActionsContext";
 import { PaymentProvider } from "./components/contextapi/PaymentContext";
 
 import InvoicePrint from
-"./components/contextapi/print/InvoicePrint";
+  "./components/contextapi/print/InvoicePrint";
 
 
 
@@ -140,98 +147,103 @@ export default function App() {
     <ToastProvider>
       {/* ExportProvider: Excel / PDF / Print logic share karega */}
       <ExportProvider>
-        
+
         {/* ActionProvider: view / edit / delete jaise common actions share karega */}
         <ActionProvider>
           <PaymentProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
+            <Routes>
+              <Route path="/login" element={<Login />} />
 
-            {/* Protected Layout */}
-            <Route path="/" element={<DashboardLayout />}>
-              {/* DEFAULT PAGE = HOME */}
-              <Route index element={<Home />} />
+              {/* Protected Layout */}
+              <Route path="/" element={<DashboardLayout />}>
+                {/* DEFAULT PAGE = HOME */}
+                <Route index element={<Home />} />
 
-              {/* Dashboard page */}
-              <Route path="dashboard" element={<Dashboard />} />
+                {/* Dashboard page */}
+                <Route path="dashboard" element={<Dashboard />} />
 
-              {/* Masters */}
-              <Route path="unit-company" element={<UnitCompanyMaster />} />
-              <Route path="item-master" element={<ItemMaster />} />
-              <Route path="customer-master" element={<CustomerMaster />} />
-              <Route path="supplier-master" element={<SupplierMaster />} />
-              <Route path="employee-master" element={<EmployeeMaster />} />
-              <Route path="designation-master" element={<DesignationMaster />} />
-              <Route path="qualification-master" element={<QualificationMaster />} />
-              <Route path="city-master" element={<CityMaster />} />
-              <Route path="expenses-master" element={<ExpensesMaster />} />
-              <Route path="role-master" element={<RoleMaster />} />
-              <Route path="user-master" element={<UserMaster />} />
-              <Route path="department-master" element={<DepartmentMaster />} />
+                {/* Masters */}
+                <Route path="unit-company" element={<UnitCompanyMaster />} />
+                <Route path="item-master" element={<ItemMaster />} />
+                <Route path="customer-master" element={<CustomerMaster />} />
+                <Route path="supplier-master" element={<SupplierMaster />} />
+                <Route path="employee-master" element={<EmployeeMaster />} />
+                <Route path="designation-master" element={<DesignationMaster />} />
+                <Route path="qualification-master" element={<QualificationMaster />} />
+                <Route path="city-master" element={<CityMaster />} />
+                <Route path="expenses-master" element={<ExpensesMaster />} />
+                <Route path="role-master" element={<RoleMaster />} />
+                <Route path="user-master" element={<UserMaster />} />
+                <Route path="department-master" element={<DepartmentMaster />} />
 
-              <Route path="functionality-master" element={<FunctionalityMaster />} />
-              <Route path="dashboard-master" element={<DashboardMaster />} />
-              <Route path="gst-master" element={<GSTMaster />} />
-              <Route path="itemunit-master" element={<ItemUnitMaster />} />
-              <Route path="hsn-master" element={<HSNMaster />} />
-              <Route path="transport-master" element={<TransportMaster />} />
-              <Route path="bank-master" element={<BankMaster />} />
-              <Route path="financialyear-master" element={<FinancialYearMaster />} />
-              <Route path="paymentmode-master" element={<PaymentModeMaster />} />
-              <Route path="state-master" element={<StateMaster />} />
-              <Route path="termsandcondition-master" element={<TermsAndConditionMaster />} />
-              <Route path="country-master" element={<CountryMaster />} />
+                <Route path="functionality-master" element={<FunctionalityMaster />} />
+                <Route path="dashboard-master" element={<DashboardMaster />} />
+                <Route path="gst-master" element={<GSTMaster />} />
+                <Route path="itemunit-master" element={<ItemUnitMaster />} />
+                <Route path="hsn-master" element={<HSNMaster />} />
+                <Route path="transport-master" element={<TransportMaster />} />
+                <Route path="bank-master" element={<BankMaster />} />
+                <Route path="financialyear-master" element={<FinancialYearMaster />} />
+                <Route path="paymentmode-master" element={<PaymentModeMaster />} />
+                <Route path="state-master" element={<StateMaster />} />
+                <Route path="termsandcondition-master" element={<TermsAndConditionMaster />} />
+                <Route path="country-master" element={<CountryMaster />} />
 
 
 
-              {/* Lists */}
-              <Route path="unit-company-list" element={<UnitCompanyList />} />
-              <Route path="item-master-list" element={<ItemMasterList />} />
-              <Route path="customer-master-list" element={<CustomerMasterList />} />
-              <Route path="supplier-master-list" element={<SupplierMasterList />} />
-              <Route path="employee-master-list" element={<EmployeeMasterList />} />
-              <Route path="designation-master-list" element={<DesignationMasterList />} />
-              <Route path="qualification-master-list" element={<QualificationMasterList />} />
-              <Route path="city-master-list" element={<CityMasterList />} />
-              <Route path="expenses-master-list" element={<ExpensesMasterList />} />
-              <Route path="role-master-list" element={<RoleMasterList />} />
-              <Route path="user-master-list" element={<UserMasterList />} />
-              <Route path="department-master-list" element={<DepartmentMasterList />} />
-              <Route path="functionality-master-list" element={<FunctionalityMasterList />} />
-              <Route path="dashboard-master-list" element={<DashboardMasterList />} />
-              <Route path="gst-master-list" element={<GSTMasterList />} />
-              <Route path="itemunit-master-list" element={<ItemUnitMasterList />} />
-              <Route path="hsn-master-list" element={<HSNMasterList />} />
-              <Route path="transport-master-list" element={<TransportMasterList />} />
-              <Route path="bank-master-list" element={<BankMasterList />} />
-              <Route path="financialyear-master-list" element={<FinancialYearMasterList />} />
-              <Route path="paymentmode-master-list" element={<PaymentModeMasterList />} />
-              <Route path="state-master-list" element={<StateMasterList />} />
-              <Route path="termsandcondition-master-list" element={<TermsAndConditionMasterList />} />
-              <Route path="country-master-list" element={<CountryMasterList />} />
+                {/* Lists */}
+                <Route path="unit-company-list" element={<UnitCompanyList />} />
+                <Route path="item-master-list" element={<ItemMasterList />} />
+                <Route path="customer-master-list" element={<CustomerMasterList />} />
+                <Route path="supplier-master-list" element={<SupplierMasterList />} />
+                <Route path="employee-master-list" element={<EmployeeMasterList />} />
+                <Route path="designation-master-list" element={<DesignationMasterList />} />
+                <Route path="qualification-master-list" element={<QualificationMasterList />} />
+                <Route path="city-master-list" element={<CityMasterList />} />
+                <Route path="expenses-master-list" element={<ExpensesMasterList />} />
+                <Route path="role-master-list" element={<RoleMasterList />} />
+                <Route path="user-master-list" element={<UserMasterList />} />
+                <Route path="department-master-list" element={<DepartmentMasterList />} />
+                <Route path="functionality-master-list" element={<FunctionalityMasterList />} />
+                <Route path="dashboard-master-list" element={<DashboardMasterList />} />
+                <Route path="gst-master-list" element={<GSTMasterList />} />
+                <Route path="itemunit-master-list" element={<ItemUnitMasterList />} />
+                <Route path="hsn-master-list" element={<HSNMasterList />} />
+                <Route path="transport-master-list" element={<TransportMasterList />} />
+                <Route path="bank-master-list" element={<BankMasterList />} />
+                <Route path="financialyear-master-list" element={<FinancialYearMasterList />} />
+                <Route path="paymentmode-master-list" element={<PaymentModeMasterList />} />
+                <Route path="state-master-list" element={<StateMasterList />} />
+                <Route path="termsandcondition-master-list" element={<TermsAndConditionMasterList />} />
+                <Route path="country-master-list" element={<CountryMasterList />} />
 
-               {/* Purchase  */}
-               <Route path="asset-purchase" element={<AssetPurchase />} />
-               <Route path="purchase-return" element={<PurchaseReturn />} />
-               <Route path="purchase-stock" element={<PurchaseStock />} />
+                {/* Purchase  */}
+                <Route path="asset-purchase" element={<AssetPurchase />} />
+                <Route path="purchase-return" element={<PurchaseReturn />} />
+                <Route path="purchase-stock" element={<PurchaseStock />} />
+                {/* Purchase Lists */}
+                <Route path="purchase-stock-list" element={<PurchaseStockList />} />
+                <Route path="purchase-return-list" element={<PurchaseReturnList />} />
 
-               {/* Billing */}
+                {/* Billing */}
                 <Route path="billing" element={<Billing />} />
-                <Route path="billing_v1" element={<BillingV1/>}/>
-                 <Route path="billing_v2" element={<BillingV2/>}/>
-                <Route path="billing_v3" element={<BillingV3/>}/>
-                <Route path="billing_v4" element={<BillingV4 />}/>
+                <Route path="billing_v1" element={<BillingV1 />} />
+                <Route path="billing_v2" element={<BillingV2 />} />
+                <Route path="billing_v3" element={<BillingV3 />} />
+                <Route path="billing_v4" element={<BillingV4 />} />
 
                 {/* Billing Invoice List */}
                 <Route path="billing-v4-list" element={<BillingV4List />} />
 
                 {/* Billing Return  */}
-                <Route path="/billing-return-v4" element={<BillingReturnV4/>} />
+                <Route path="/billing-return-v4" element={<BillingReturnV4 />} />
+                  {/* BillingV4 Return List */}
+                <Route path="/billing-return-v4-list" element={<BillingReturnV4List />} />
 
-                  {/* Billing Settlement  */}
+                {/* Billing Settlement  */}
                 <Route path="/billing-settlement-v4" element={<BillingV4Settlement />} />
 
-               {/* Inventory */}
+                {/* Inventory */}
                 <Route path="opening-stock" element={<OpeningStock />} />
                 <Route path="stock-expiry" element={<StockExpiry />} />
                 <Route path="stock-order" element={<StockOrder />} />
@@ -252,35 +264,35 @@ export default function App() {
                 <Route path="employee-expenses" element={<EmployeeExpenses />} />
 
                 {/* All Reports */}
-               
-                   <Route path="assetpurchase-report" element={<AssetPurchaseReport />} />
-                   <Route path="purchase-report" element={<PurchaseReport />} />
-                   <Route path="purchasereturn-report" element={<PurchaseReturnReport />} />
 
-                    <Route path="stock-report" element={<StockReport />} />
-                    <Route path="finalstock-report" element={<FinalStockReport />} />
+                <Route path="assetpurchase-report" element={<AssetPurchaseReport />} />
+                <Route path="purchase-report" element={<PurchaseReport />} />
+                <Route path="purchasereturn-report" element={<PurchaseReturnReport />} />
 
-                     <Route path="bill-report" element={<BillReport />} />
-                      <Route path="billreturn-report" element={<BillReturnReport />} />
+                <Route path="stock-report" element={<StockReport />} />
+                <Route path="finalstock-report" element={<FinalStockReport />} />
+
+                <Route path="bill-report" element={<BillReport />} />
+                <Route path="billreturn-report" element={<BillReturnReport />} />
 
 
 
-                    {/* Reports Route End Here */}
-  {/* ----------------------------------------------------------------------------------------------------------------------- */}
+                {/* Reports Route End Here */}
+                {/* ----------------------------------------------------------------------------------------------------------------------- */}
 
-              <Route path="assign-functionality" element={<AssignFunctionality />} />
-              <Route path="setting-functionality" element={<SettingsPage />} />
+                <Route path="assign-functionality" element={<AssignFunctionality />} />
+                <Route path="setting-functionality" element={<SettingsPage />} />
 
-              {/* fallback inside layout */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
+                {/* fallback inside layout */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
 
-            {/* fallback to login */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
+              {/* fallback to login */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
           </PaymentProvider>
         </ActionProvider>
-        
+
       </ExportProvider>
     </ToastProvider>
   );

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from 'axios';
 import {
     Receipt,
     Search,
@@ -13,60 +14,56 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 const BillingTransactionV1 = () => {
-    
-    const [transactions] = useState([
-        {
-            id: 1,
-            invoiceNo: "INV-2026-0001",
-            customer: "Acme Industries",
-            date: "2026-05-09",
-            paymentMode: "Cash",
-            items: 4,
-            totalAmount: 12500,
-            paidAmount: 12500,
-            balance: 0,
-            status: "Paid",
-            discount: 0
-        },
-        {
-            id: 2,
-            invoiceNo: "INV-2026-0002",
-            customer: "Star Fashion",
-            date: "2026-05-09",
-            paymentMode: "UPI",
-            items: 2,
-            totalAmount: 1533,
-            paidAmount: 1500,
-            balance: 33,
-            status: "Pending",
-            discount: 0
-        },
-        {
-            id: 3,
-            invoiceNo: "INV-2026-0003",
-            customer: "Royal Traders",
-            date: "2026-05-09",
-            paymentMode: "Card",
-            items: 8,
-            totalAmount: 54279,
-            paidAmount: 50000,
-            balance: 4279,
-            status: "Partial",
-            discount: 500
-        }
-    ]);
+    const [transactions, setTransactions] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
 
-    const totals = {
-        totalSales: transactions.reduce((sum, t) => sum + t.totalAmount, 0),
-        totalPaid: transactions.reduce((sum, t) => sum + t.paidAmount, 0),
-        totalPending: transactions.reduce((sum, t) => sum + t.balance, 0),
-        totalDiscount: transactions.reduce((sum, t) => sum + (t.discount || 0), 0)
+    useEffect(() => {
+        const fetchBillingV4List = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const res = await axios.get('/api/invoice');
+                const data = res?.data ?? [];
+                setTransactions(Array.isArray(data) ? data : []);
+            } catch (fetchErr) {
+                setError('Unable to load billing records.');
+                console.error('Billing V4 fetch error:', fetchErr);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchBillingV4List();
+    }, []);
+
+    const toNumber = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : 0;
     };
 
-    // Data format for the Pie Chart
+    const getDiscountAmount = (trx) => {
+        const explicit = trx.totalDiscount ?? trx.discount ?? trx.discountAmount ?? trx.discountAmt ?? trx.invoiceDiscount ?? trx.invoiceDisc ?? trx.invoiceDiscountAmount ?? trx.discount_value ?? trx.balance?.discountAmount;
+        const itemTotal = Array.isArray(trx.items)
+            ? trx.items.reduce((sum, item) => sum + toNumber(item.discountAmt ?? item.discountAmount ?? item.discountAmt ?? 0), 0)
+            : 0;
+        return toNumber(explicit ?? itemTotal) || itemTotal;
+    };
+
+    const getInvoiceAmount = (trx) => toNumber(trx.finalAmount ?? trx.balance?.invoiceAmount ?? trx.invoiceAmount ?? trx.totalGrossAmount ?? 0);
+    const getPaidAmount = (trx) => toNumber(trx.balance?.paidAmount ?? trx.paidAmount ?? 0);
+    const getPendingAmount = (trx) => toNumber(trx.balance?.balanceAmount ?? trx.balanceAmount ?? 0);
+
+    const totals = {
+        totalSales: transactions.reduce((sum, t) => sum + getInvoiceAmount(t), 0),
+        totalPaid: transactions.reduce((sum, t) => sum + getPaidAmount(t), 0),
+        totalPending: transactions.reduce((sum, t) => sum + getPendingAmount(t), 0),
+        totalDiscount: transactions.reduce((sum, t) => sum + getDiscountAmount(t), 0)
+    };
+
     const chartData = [
-        { name: 'Paid Amount', value: totals.totalPaid, color: '#10b981' }, // Emerald-500
-        { name: 'Pending Amount', value: totals.totalPending, color: '#f59e0b' }, // Amber-500
+        { name: 'Paid Amount', value: totals.totalPaid, color: '#10b981' },
+        { name: 'Pending Amount', value: totals.totalPending, color: '#f59e0b' }
     ];
 
     return (
@@ -102,26 +99,32 @@ const BillingTransactionV1 = () => {
                             <p className="text-[10px] uppercase font-bold text-slate-500">Payment Summary</p>
                         </div>
                         <div className="flex-grow">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={chartData}
-                                        innerRadius={40}
-                                        outerRadius={60}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {chartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip 
-                                        contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
-                                        formatter={(value) => `₹${value.toLocaleString('en-IN')}`}
-                                    />
-                                    <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            {chartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={chartData}
+                                            innerRadius={40}
+                                            outerRadius={60}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip 
+                                            contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
+                                            formatter={(value) => `₹${value.toLocaleString('en-IN')}`}
+                                        />
+                                        <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-[11px] text-slate-500">
+                                    No billing records available for chart.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -154,50 +157,69 @@ const BillingTransactionV1 = () => {
 
                 {/* TABLE */}
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1000px]">
-                        <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold border-b border-slate-200">
-                            <tr>
-                                <th className="px-3 py-3 text-center w-10">Sr</th>
-                                <th className="px-3 py-3 text-left">Invoice No</th>
-                                <th className="px-3 py-3">Date</th>
-                                <th className="px-3 py-3 text-left">Customer</th>
-                                <th className="px-3 py-3 text-right">Total Sale</th>
-                                <th className="px-3 py-3 text-right">Discount</th>
-                                <th className="px-3 py-3 text-right">Paid</th>
-                                <th className="px-3 py-3 text-right">Pending</th>
-                                <th className="px-3 py-3">Status</th>
-                                <th className="px-3 py-3 text-center">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-[11px]">
-                            {transactions.map((trx, index) => (
-                                <tr key={trx.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                                    <td className="px-3 py-2 text-center text-slate-400">{index + 1}</td>
-                                    <td className="px-3 py-2 font-bold text-blue-600">{trx.invoiceNo}</td>
-                                    <td className="px-3 py-2 text-center text-slate-500">{trx.date}</td>
-                                    <td className="px-3 py-2 font-medium">{trx.customer}</td>
-                                    <td className="px-3 py-2 text-right font-bold">₹{trx.totalAmount.toLocaleString("en-IN")}</td>
-                                    <td className="px-3 py-2 text-right font-bold text-rose-600">₹{trx.discount.toLocaleString("en-IN")}</td>
-                                    <td className="px-3 py-2 text-right font-bold text-emerald-600">₹{trx.paidAmount.toLocaleString("en-IN")}</td>
-                                    <td className="px-3 py-2 text-right font-bold text-amber-600">₹{trx.balance.toLocaleString("en-IN")}</td>
-                                    <td className="px-3 py-2 text-center">
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                            trx.status === "Paid" ? "bg-emerald-100 text-emerald-700" : 
-                                            trx.status === "Pending" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
-                                        }`}>
-                                            {trx.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <button className="w-7 h-7 rounded bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white flex items-center justify-center"><Eye size={14} /></button>
-                                            <button className="w-7 h-7 rounded bg-slate-100 text-slate-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center"><Printer size={14} /></button>
-                                        </div>
-                                    </td>
+                    {isLoading ? (
+                        <div className="p-6 text-center text-sm text-slate-500">Loading billing records...</div>
+                    ) : error ? (
+                        <div className="p-6 text-center text-sm text-rose-600">{error}</div>
+                    ) : (
+                        <table className="w-full min-w-[1000px]">
+                            <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-3 py-3 text-center w-10">Sr</th>
+                                    <th className="px-3 py-3 text-left">Invoice No</th>
+                                    <th className="px-3 py-3">Date</th>
+                                    <th className="px-3 py-3 text-left">Customer</th>
+                                    <th className="px-3 py-3 text-right">Total Sale</th>
+                                    <th className="px-3 py-3 text-right">Discount</th>
+                                    <th className="px-3 py-3 text-right">Paid</th>
+                                    <th className="px-3 py-3 text-right">Pending</th>
+                                    <th className="px-3 py-3">Status</th>
+                                    <th className="px-3 py-3 text-center">Action</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="text-[11px]">
+                                {transactions.length > 0 ? (
+                                    transactions.map((trx, index) => {
+                                        const totalAmount = getInvoiceAmount(trx);
+                                        const paidAmount = getPaidAmount(trx);
+                                        const pendingAmount = getPendingAmount(trx) || Math.max(0, totalAmount - paidAmount);
+                                        const discountAmount = getDiscountAmount(trx);
+
+                                        return (
+                                            <tr key={trx.invoiceId || trx.balanceId || index} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                                                <td className="px-3 py-2 text-center text-slate-400">{index + 1}</td>
+                                                <td className="px-3 py-2 font-bold text-blue-600">{trx.invoiceNo || 'N/A'}</td>
+                                                <td className="px-3 py-2 text-center text-slate-500">{trx.invoiceDate || '—'}</td>
+                                                <td className="px-3 py-2 font-medium">{trx.unitName || trx.customerName || trx.customer?.customerName || 'Unknown'}</td>
+                                                <td className="px-3 py-2 text-right font-bold">₹{totalAmount.toLocaleString('en-IN')}</td>
+                                                <td className="px-3 py-2 text-right font-bold text-rose-600">₹{discountAmount.toLocaleString('en-IN')}</td>
+                                                <td className="px-3 py-2 text-right font-bold text-emerald-600">₹{paidAmount.toLocaleString('en-IN')}</td>
+                                                <td className="px-3 py-2 text-right font-bold text-amber-600">₹{pendingAmount.toLocaleString('en-IN')}</td>
+                                                <td className="px-3 py-2 text-center">
+                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                                        trx.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 
+                                                        trx.status === 'Pending' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {trx.status || 'Unknown'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <button className="w-7 h-7 rounded bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white flex items-center justify-center"><Eye size={14} /></button>
+                                                        <button className="w-7 h-7 rounded bg-slate-100 text-slate-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center"><Printer size={14} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={10} className="px-3 py-6 text-center text-slate-500">No billing records found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
         </div>
