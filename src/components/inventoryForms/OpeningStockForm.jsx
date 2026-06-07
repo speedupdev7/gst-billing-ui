@@ -1,9 +1,5 @@
 import React, { useState } from "react";
-import {
-  Save,
-  RotateCcw,
-  Package,
-} from "lucide-react";
+import { Save, RotateCcw, Package } from "lucide-react";
 
 const OpeningStockForm = () => {
   const [formData, setFormData] = useState({
@@ -181,9 +177,7 @@ const OpeningStockForm = () => {
 
           {/* MRP */}
           <div>
-            <label className="text-xs font-medium text-gray-700">
-              MRP
-            </label>
+            <label className="text-xs font-medium text-gray-700">MRP</label>
 
             <input
               type="number"
@@ -197,9 +191,7 @@ const OpeningStockForm = () => {
 
           {/* GST */}
           <div>
-            <label className="text-xs font-medium text-gray-700">
-              GST %
-            </label>
+            <label className="text-xs font-medium text-gray-700">GST %</label>
 
             <input
               type="number"
@@ -244,9 +236,7 @@ const OpeningStockForm = () => {
 
           {/* Remarks */}
           <div className="md:col-span-2 lg:col-span-3">
-            <label className="text-xs font-medium text-gray-700">
-              Remarks
-            </label>
+            <label className="text-xs font-medium text-gray-700">Remarks</label>
 
             <textarea
               rows="3"

@@ -169,6 +169,13 @@ const initialMenu = [
           { key: "billreturn-report", title: "Bill Return Report", path: "billreturn-report" },
         ],
       },
+      {
+        key: "gst-report",
+        title: "GST Report",
+        children: [
+          { key: "gst-report", title: "GST Report", path: "gst-report" },
+        ],
+      }
     ],
   },
   { key: "setting", title: "Setting", icon: "setting", path: "/setting-functionality" },

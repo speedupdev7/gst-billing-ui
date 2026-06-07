@@ -127,6 +127,8 @@ import FinalStockReport from "./components/reports/stocks/FinalStockReport"
 import BillReport from "./components/reports/billing/BillReport";
 import BillReturnReport from "./components/reports/billing/BillReturnReport"
 
+// GST Report
+import GSTReport from "./components/reports/gstreports/GSTReport";
 import SettingsPage from "./pages/Setting";
 
 // 🔹 Contexts (ye paths tumhare folder structure ke hisaab se)
@@ -274,8 +276,9 @@ export default function App() {
 
                 <Route path="bill-report" element={<BillReport />} />
                 <Route path="billreturn-report" element={<BillReturnReport />} />
-
-
+                
+                
+                <Route path="gst-report" element={<GSTReport />} />
 
                 {/* Reports Route End Here */}
                 {/* ----------------------------------------------------------------------------------------------------------------------- */}
