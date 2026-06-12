@@ -601,21 +601,29 @@ const BillingReturnV4List = () => {
 
   useEffect(() => { injectStyles(); }, []);
 
+  const formatDate = (date) => date ? date.toISOString().slice(0, 10) : undefined;
+
   // ── Fetch ────────────────────────────────────────────────
   const fetchReturns = async () => {
     try {
-      const res = await axios.get(`/api/invoice/returns/all-paginated?page=${page}&size=${pageSize}`);
+      const params = { page, size: pageSize };
+      if (fromDate) params.fromDate = formatDate(fromDate);
+      if (toDate) params.toDate = formatDate(toDate);
+
+      const res = await axios.get('/api/invoice/returns', { params });
       const payload = res.data;
-      setReturns(payload?.content || payload || []);
+      setReturns(payload?.content || []);
       setTotalPages(payload?.totalPages ?? 0);
       setTotalElements(payload?.totalElements ?? 0);
     } catch (err) {
       console.error('Error fetching returns:', err);
       setReturns([]);
+      setTotalPages(0);
+      setTotalElements(0);
     }
   };
 
-  useEffect(() => { fetchReturns(); }, [page, pageSize]);
+  useEffect(() => { fetchReturns(); }, [page, pageSize, fromDate, toDate]);
   useEffect(() => { setPage(0); }, [searchTerm, fromDate, toDate]);
 
   const handleReset = () => { setSearchTerm(''); setFromDate(null); setToDate(null); setPage(0); };
@@ -641,7 +649,7 @@ const BillingReturnV4List = () => {
   const handleConfirmDelete = async () => {
     try {
       await axios.delete(`/api/invoice/returns/${itemToDelete}`);
-      setReturns(prev => prev.filter(r => r.returnId !== itemToDelete));
+      setReturns(prev => prev.filter(r => r.returnNo !== itemToDelete && r.returnId !== itemToDelete && r.id !== itemToDelete));
       toast.success('Return deleted successfully!');
     } catch { toast.error('Delete failed.'); }
     finally { setIsDeleteDialogOpen(false); setItemToDelete(null); }
@@ -778,7 +786,7 @@ const BillingReturnV4List = () => {
             <tbody>
               {filteredReturns.length > 0 ? (
                 filteredReturns.map((ret, index) => {
-                  const creditAmt  = Number(ret.creditAmount || ret.totalAmount || 0);
+                  const creditAmt  = Number(ret.finalAmount || ret.creditAmount || ret.totalAmount || 0);
                   const refundIssued = Number(ret.refundAmount || 0);
 
                   return (
@@ -799,7 +807,7 @@ const BillingReturnV4List = () => {
                           <button
                             className="brt4-action-btn del"
                             title="Delete Return"
-                            onClick={() => openDeleteModal(ret.returnId || ret.id)}
+                            onClick={() => openDeleteModal(ret.returnNo || ret.returnId || ret.id)}
                           >
                             <DeleteIcon sx={{ fontSize: 14 }} />
                           </button>
