@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Search,
   Plus,
@@ -20,141 +21,6 @@ import {
 
 /* ── constants ── */
 const ITEMS_PER_PAGE = 8;
-
-const STOCK_DATA = [
-  {
-    id: 1,
-    item: "Paracetamol 500mg",
-    category: "Tablet",
-    batch: "BT1023",
-    qty: 120,
-    rate: 12,
-    amount: 1440,
-    expiry: "12/2027",
-    status: "In Stock",
-  },
-  {
-    id: 2,
-    item: "Cough Syrup",
-    category: "Syrup",
-    batch: "SY2201",
-    qty: 45,
-    rate: 85,
-    amount: 3825,
-    expiry: "08/2026",
-    status: "In Stock",
-  },
-  {
-    id: 3,
-    item: "Vitamin Capsules",
-    category: "Capsule",
-    batch: "VC9088",
-    qty: 75,
-    rate: 35,
-    amount: 2625,
-    expiry: "03/2028",
-    status: "In Stock",
-  },
-  {
-    id: 4,
-    item: "Amoxicillin 250mg",
-    category: "Capsule",
-    batch: "AM4412",
-    qty: 8,
-    rate: 18,
-    amount: 144,
-    expiry: "06/2026",
-    status: "Low Stock",
-  },
-  {
-    id: 5,
-    item: "Cetirizine 10mg",
-    category: "Tablet",
-    batch: "CT6634",
-    qty: 200,
-    rate: 5,
-    amount: 1000,
-    expiry: "01/2028",
-    status: "In Stock",
-  },
-  {
-    id: 6,
-    item: "Antacid Suspension",
-    category: "Syrup",
-    batch: "AS3321",
-    qty: 30,
-    rate: 120,
-    amount: 3600,
-    expiry: "09/2025",
-    status: "Expiring",
-  },
-  {
-    id: 7,
-    item: "Metformin 500mg",
-    category: "Tablet",
-    batch: "MT7890",
-    qty: 5,
-    rate: 22,
-    amount: 110,
-    expiry: "11/2027",
-    status: "Low Stock",
-  },
-  {
-    id: 8,
-    item: "Azithromycin 500mg",
-    category: "Tablet",
-    batch: "AZ1145",
-    qty: 60,
-    rate: 45,
-    amount: 2700,
-    expiry: "07/2027",
-    status: "In Stock",
-  },
-  {
-    id: 9,
-    item: "Omega-3 Capsules",
-    category: "Capsule",
-    batch: "OM5523",
-    qty: 90,
-    rate: 60,
-    amount: 5400,
-    expiry: "05/2028",
-    status: "In Stock",
-  },
-  {
-    id: 10,
-    item: "Iron Syrup",
-    category: "Syrup",
-    batch: "IR8801",
-    qty: 12,
-    rate: 95,
-    amount: 1140,
-    expiry: "04/2026",
-    status: "Low Stock",
-  },
-  {
-    id: 11,
-    item: "Pantoprazole 40mg",
-    category: "Tablet",
-    batch: "PT2244",
-    qty: 150,
-    rate: 14,
-    amount: 2100,
-    expiry: "02/2028",
-    status: "In Stock",
-  },
-  {
-    id: 12,
-    item: "Calcium + D3 Tablets",
-    category: "Tablet",
-    batch: "CA9901",
-    qty: 3,
-    rate: 28,
-    amount: 84,
-    expiry: "10/2025",
-    status: "Expiring",
-  },
-];
 
 /* ── helpers ── */
 const inr = (n) => "₹" + Number(n).toLocaleString("en-IN");
@@ -237,18 +103,62 @@ const OpeningStock = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [reportData, setReportData] = useState({
+    items: [],
+    totalItems: 0,
+    totalQuantity: 0,
+    overallStockValue: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState(null);
+
+  useEffect(() => {
+    const fetchOpeningStockReport = async () => {
+      setLoading(true);
+      setApiError(null);
+      try {
+        const response = await axios.get("/api/item-master/opening-stock-report", {
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = response.data || {
+          items: [],
+          totalItems: 0,
+          totalQuantity: 0,
+          overallStockValue: 0,
+        };
+        setReportData({
+          items: Array.isArray(data.items) ? data.items : [],
+          totalItems: Number(data.totalItems) || 0,
+          totalQuantity: Number(data.totalQuantity) || 0,
+          overallStockValue: Number(data.overallStockValue) || 0,
+        });
+      } catch (error) {
+        setApiError(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load opening stock report.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOpeningStockReport();
+  }, []);
 
   /* ── filtered data ── */
   const filtered = useMemo(() => {
-    return STOCK_DATA.filter((r) => {
+    return reportData.items.filter((r) => {
       const matchSearch =
-        r.item.toLowerCase().includes(search.toLowerCase()) ||
-        r.batch.toLowerCase().includes(search.toLowerCase());
+        r.itemName?.toLowerCase().includes(search.toLowerCase()) ||
+        r.batchCode?.toLowerCase().includes(search.toLowerCase()) ||
+        r.itemCode?.toLowerCase().includes(search.toLowerCase());
       const matchCategory = category === "All" || r.category === category;
-      const matchStatus = statusFilter === "All" || r.status === statusFilter;
+      const matchStatus =
+        statusFilter === "All" || r.status === statusFilter;
       return matchSearch && matchCategory && matchStatus;
     });
-  }, [search, category, statusFilter]);
+  }, [search, category, statusFilter, reportData.items]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const pageRows = filtered.slice(
@@ -259,14 +169,12 @@ const OpeningStock = () => {
   /* ── totals ── */
   const totals = useMemo(
     () => ({
-      items: STOCK_DATA.length,
-      qty: STOCK_DATA.reduce((s, r) => s + r.qty, 0),
-      value: STOCK_DATA.reduce((s, r) => s + r.amount, 0),
-      lowStock: STOCK_DATA.filter(
-        (r) => r.status === "Low Stock" || r.status === "Expiring",
-      ).length,
+      items: reportData.totalItems,
+      qty: reportData.totalQuantity,
+      value: reportData.overallStockValue,
+      lowStock: reportData.items.filter((r) => r.openingStock < 20).length,
     }),
-    [],
+    [reportData],
   );
 
   const inputCls =
@@ -358,7 +266,7 @@ const OpeningStock = () => {
         <StatCard
           label="Alerts"
           value={totals.lowStock}
-          sub="low stock / expiring"
+          sub="low stock"
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="amber"
           onClick={() =>
@@ -451,16 +359,15 @@ const OpeningStock = () => {
             <thead>
               <tr className="bg-slate-800 text-white">
                 {[
-                  ["#", "w-10  text-center"],
+                  ["#", "w-10 text-center"],
+                  ["Item Code", "text-left"],
                   ["Item Name", "text-left"],
-                  ["Category", "text-left"],
                   ["Batch No", "text-left"],
-                  ["Qty", "text-right"],
+                  ["Quantity", "text-right"],
                   ["Rate", "text-right"],
                   ["Amount", "text-right"],
                   ["Expiry", "text-center"],
-                  ["Status", "text-center"],
-                  ["", "w-10  text-center"],
+                  ["Action", "w-16 text-center"],
                 ].map(([h, cls]) => (
                   <th
                     key={h}
@@ -475,66 +382,42 @@ const OpeningStock = () => {
             <tbody className="divide-y divide-slate-100">
               {pageRows.length > 0 ? (
                 pageRows.map((r, i) => {
-                  const sc = STATUS_CFG[r.status] || STATUS_CFG["In Stock"];
                   const serial = (page - 1) * ITEMS_PER_PAGE + i + 1;
                   return (
                     <tr
-                      key={r.id}
+                      key={r.openingStockId || `${r.itemId}-${r.batchCode}-${i}`}
                       className="hover:bg-blue-50/30 transition-colors group"
                     >
                       <td className="px-4 py-3 text-center text-xs text-slate-400 font-mono">
                         {serial}
                       </td>
 
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {r.item}
-                        </p>
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-800">
+                        {r.itemCode || "—"}
                       </td>
 
-                      <td className="px-4 py-3">
-                        <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded ${CAT_COLORS[r.category] || "bg-slate-100 text-slate-600"}`}
-                        >
-                          {r.category}
-                        </span>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {r.itemName || "—"}
                       </td>
 
-                      <td className="px-4 py-3">
-                        <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                          {r.batch}
-                        </span>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {r.batchCode || "—"}
                       </td>
 
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={`text-sm font-bold tabular-nums ${r.qty <= 10 ? "text-rose-600" : "text-slate-800"}`}
-                        >
-                          {r.qty}
-                        </span>
+                      <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">
+                        {r.openingStock?.toLocaleString("en-IN") ?? "0"}
                       </td>
 
                       <td className="px-4 py-3 text-right text-sm text-slate-600 tabular-nums">
-                        {inr(r.rate)}
+                        {r.purchasePrice != null ? inr(r.purchasePrice) : "—"}
                       </td>
 
                       <td className="px-4 py-3 text-right text-sm font-bold text-blue-700 tabular-nums">
-                        {inr(r.amount)}
+                        {r.totalAmount != null ? inr(r.totalAmount) : "—"}
                       </td>
 
                       <td className="px-4 py-3 text-center text-xs text-slate-500">
-                        {r.expiry}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${sc.badge}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}
-                          />
-                          {r.status}
-                        </span>
+                        {r.expiryDate || "—"}
                       </td>
 
                       <td className="px-4 py-3 text-center">
@@ -548,7 +431,7 @@ const OpeningStock = () => {
               ) : (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-6 py-16 text-center text-slate-400 text-sm"
                   >
                     No stock records match the current filters.
