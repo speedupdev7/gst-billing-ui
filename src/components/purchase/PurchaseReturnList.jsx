@@ -659,7 +659,7 @@ const PurchaseReturnV1List = () => {
   /* ── Fetch ── */
   const fetchReturns = async () => {
     try {
-      const res = await axios.get(`/api/purchase-invoice/returns/all-paginated?page=${page}&size=${pageSize}`);
+      const res = await axios.get(`/api/purchase/returns?page=${page}&size=${pageSize}`);
       const payload = res.data;
       setReturns(payload?.content || payload || []);
       setTotalPages(payload?.totalPages ?? 0);
@@ -686,7 +686,7 @@ const PurchaseReturnV1List = () => {
     if (!retNo) { toast.error('Return number not available.'); return; }
     setIsLoadingDetails(true);
     try {
-      const res = await axios.get(`/api/purchase-invoice/returns/${encodeURIComponent(retNo)}`);
+      const res = await axios.get(`/api/purchase/returns/${encodeURIComponent(retNo)}`);
       setSelectedReturn(res?.data?.data || res?.data || ret);
       setIsModalOpen(true);
     } catch {
@@ -702,7 +702,7 @@ const PurchaseReturnV1List = () => {
   const openDeleteModal     = (id) => { setItemToDelete(id); setIsDeleteDialogOpen(true); };
   const handleConfirmDelete = async () => {
     try {
-      await axios.delete(`/api/purchase-invoice/returns/${itemToDelete}`);
+      await axios.delete(`/api/purchase/returns/${itemToDelete}`);
       setReturns(prev => prev.filter(r => r.returnId !== itemToDelete));
       toast.success('Purchase return deleted successfully!');
     } catch {

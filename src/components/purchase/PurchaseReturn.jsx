@@ -186,57 +186,69 @@ const PurchaseReturnV1 = () => {
     const getInvoicePurchaseByNumber = async (invNo) => {
         try {
             if (!invNo || invNo.length < 3) return;
-            const response = await axios.get('/api/purchase-invoice/search-by-number', { params: { invoiceNo: invNo } });
+            const response = await axios.get('/api/purchase/search-by-number', { params: { purchaseNo: invNo } });
             const data = response.data?.data || response.data;
             if (!data) return;
 
             const supplier = data.supplier || data.vendorMaster || null;
             setSelectedSupplier(supplier);
-            const supplierName = supplier?.supplierName || supplier?.vendorName || data.supplierName || "";
+            const supplierName = supplier?.supplierName || supplier?.vendorName || data.supplierName || data.supplierMasterName || "";
             setSupplierSearch(supplierName);
             setShowSupplierDropdown(false);
 
-            const apiInvoiceNo = data.invoiceNo || invNo;
+            const apiInvoiceNo = data.purchaseNo || data.invoiceNo || invNo;
             setInvoiceNo(apiInvoiceNo);
             setLoadedInvoiceNo(apiInvoiceNo);
 
-            if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
-            if (data.placeOfSupply) setPlaceOfSupply(data.placeOfSupply);
+            const purchaseDate = data.purchaseDate || data.invoiceDate || data.billDate || null;
+            if (purchaseDate) setInvoiceDate(new Date(purchaseDate));
+            setPlaceOfSupply(data.placeOfSupply || data.placeOfSupplyName || 'Maharashtra');
             setReverseCharge(Boolean(data.reverseCharge));
-            setTransporterName(data.transporterName || '');
-            setVehicleNumber(data.vehicleNumber || '');
-            setNarration(data.narration || '');
+            setTransporterName(data.transporterName || data.transportName || '');
+            setVehicleNumber(data.vehicleNumber || data.vehicleNo || '');
+            setNarration(data.narration || data.remarks || '');
 
             const invoiceItems = data.invoiceItems || data.items || [];
             const mappedItems = invoiceItems.map((item) => ({
                 id: Date.now() + Math.random(),
-                invoiceItemId: item.invoiceItemId || item.id,
-                itemId: item.itemId,
+                purchaseItemId: item.purchaseItemId ?? item.invoiceItemId ?? item.id,
+                invoiceItemId: item.purchaseItemId ?? item.invoiceItemId ?? item.id,
+                itemId: item.itemId ?? item.item?.itemId ?? null,
                 itemName: item.itemName || item.item?.itemName || "",
                 itemNameDetails: item.itemNameDetails || "",
                 batch: item.batchCode || item.batch || "",
-                hsn: item.hsnCode || item.hsn || "0000",
-                rate: item.rate ?? 0,
-                qty: item.quantity ?? item.qty ?? 0,
+                hsn: item.hsnCode || item.hsn || item.item?.hsnCode || "0000",
+                rate: item.rate ?? item.purchasePrice ?? item.unitPrice ?? 0,
+                qty: item.quantity ?? item.qty ?? item.purchaseQty ?? 0,
                 returnQty: 0,
-                grossAmount: item.grossAmount ?? 0,
+                grossAmount: item.grossAmount ?? item.totalAmount ?? 0,
                 discP: item.discountPct ?? item.discP ?? 0,
                 discA: item.discountAmt ?? item.discA ?? 0,
                 taxableAmt: item.taxableAmount ?? item.taxableAmt ?? 0,
-                gstP: item.gstRate ?? item.gstP ?? 0,
+                gstP: item.gstRate ?? item.gstP ?? item.taxRate ?? 0,
                 gstA: (item.cgstAmt ?? 0) + (item.sgstAmt ?? 0),
-                lineTotal: item.lineTotal ?? 0,
+                lineTotal: item.lineTotal ?? item.finalAmount ?? 0,
             }));
 
             const updatedItems = calculateTotals(mappedItems);
             setItems(updatedItems);
-            if (data.balance) {
-                setTotals(prev => ({
-                    ...prev,
-                    invoiceTotal: data.balance.invoiceAmount ?? prev.invoiceTotal,
-                    roundOff: data.balance.roundOff?.toFixed(2) ?? prev.roundOff,
-                }));
-            }
+
+            const totalGross = Number(data.totalGrossAmount ?? data.totalGross ?? 0);
+            const totalDiscount = Number(data.totalDiscount ?? data.discountAmount ?? 0);
+            const taxableAmount = Number(data.taxableAmount ?? data.taxable ?? 0);
+            const totalGst = Number(data.totalCgst ?? 0) + Number(data.totalSgst ?? 0) + Number(data.totalIgst ?? 0);
+            const finalAmount = Number(data.finalAmount ?? data.invoiceTotal ?? data.totalAmount ?? 0);
+            const roundOffValue = Number(data.roundOff ?? 0);
+
+            setTotals({
+                totalGross,
+                totalDisc: totalDiscount,
+                totalTaxable: taxableAmount,
+                totalGST: totalGst,
+                invoiceTotal: Math.round(finalAmount),
+                roundOff: roundOffValue.toFixed(2),
+            });
+
             setOriginalInvoiceData(data);
             fetchReturnHistory(apiInvoiceNo);
         } catch (err) {
@@ -247,7 +259,7 @@ const PurchaseReturnV1 = () => {
     const fetchReturnHistory = async (invNo) => {
         try {
             setIsLoadingReturns(true);
-            const response = await axios.get(`/api/purchase-invoice/${encodeURIComponent(invNo)}/returns`);
+            const response = await axios.get(`/api/purchase/${encodeURIComponent(invNo)}/returns`);
             const returns = response.data?.data || response.data || [];
             setReturnHistory(Array.isArray(returns) ? returns : []);
         } catch (err) {
@@ -272,23 +284,23 @@ const PurchaseReturnV1 = () => {
                 return;
             }
             const returnItemLines = items
-                .filter(item => item.returnQty > 0)
+                .filter(item => Number(item.returnQty || 0) > 0)
                 .map(item => ({
-                    invoiceItemId: item.invoiceItemId || item.itemId,
-                    itemId: item.itemId,
+                    purchaseItemId: item.purchaseItemId ?? item.invoiceItemId ?? item.itemId ?? null,
+                    itemId: item.itemId ?? null,
                     batchCode: item.batch || 'BATCH01',
                     hsnCode: item.hsn || '0000',
-                    quantity: item.returnQty,
-                    rate: item.rate,
-                    grossAmount: item.rate * item.returnQty,
-                    discountPct: item.discP,
-                    discountAmt: (item.rate * item.returnQty * item.discP) / 100,
-                    taxableAmount: ((item.rate * item.returnQty) * (1 - item.discP / 100)),
-                    gstRate: item.gstP,
-                    cgstAmt: (((item.rate * item.returnQty) * (1 - item.discP / 100)) * item.gstP / 100) / 2,
-                    sgstAmt: (((item.rate * item.returnQty) * (1 - item.discP / 100)) * item.gstP / 100) / 2,
+                    quantity: Number(item.returnQty || 0),
+                    rate: Number(item.rate || 0),
+                    grossAmount: Number(item.rate || 0) * Number(item.returnQty || 0),
+                    discountPct: Number(item.discP || 0),
+                    discountAmt: (Number(item.rate || 0) * Number(item.returnQty || 0) * Number(item.discP || 0)) / 100,
+                    taxableAmount: ((Number(item.rate || 0) * Number(item.returnQty || 0)) * (1 - Number(item.discP || 0) / 100)),
+                    gstRate: Number(item.gstP || 0),
+                    cgstAmt: (((Number(item.rate || 0) * Number(item.returnQty || 0)) * (1 - Number(item.discP || 0) / 100)) * Number(item.gstP || 0) / 100) / 2,
+                    sgstAmt: (((Number(item.rate || 0) * Number(item.returnQty || 0)) * (1 - Number(item.discP || 0) / 100)) * Number(item.gstP || 0) / 100) / 2,
                     igstAmt: 0,
-                    lineTotal: ((item.rate * item.returnQty) * (1 - item.discP / 100)) * (1 + item.gstP / 100),
+                    lineTotal: ((Number(item.rate || 0) * Number(item.returnQty || 0)) * (1 - Number(item.discP || 0) / 100)) * (1 + Number(item.gstP || 0) / 100),
                 }));
 
             if (returnItemLines.length === 0) {
@@ -296,8 +308,14 @@ const PurchaseReturnV1 = () => {
                 return;
             }
 
+            const missingPurchaseItemIds = returnItemLines.filter(item => item.purchaseItemId == null);
+            if (missingPurchaseItemIds.length > 0) {
+                toast.error('Selected return items are missing purchase-item references. Please reload the purchase invoice and try again.');
+                return;
+            }
+
             const returnPayload = {
-                invoiceNo: invoiceNumberToUse,
+                purchaseNo: invoiceNumberToUse,
                 returnNo: `PRTN-${new Date().getFullYear()}-${Date.now()}`,
                 returnDate: new Date().toISOString().split('T')[0],
                 returnType: 'PURCHASE_RETURN',
@@ -308,7 +326,7 @@ const PurchaseReturnV1 = () => {
             };
 
             setIsSubmittingReturn(true);
-            const response = await axios.post('/api/purchase-invoice/returns', returnPayload);
+            const response = await axios.post('/api/purchase/returns', returnPayload);
 
             if (response.status === 200 || response.status === 201) {
                 toast.success('Purchase return submitted successfully!');

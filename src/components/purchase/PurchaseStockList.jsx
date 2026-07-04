@@ -12,7 +12,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ReusableDialogueBox from "../contextapi/ReusableDialogueBox";
 import { useToast } from "../contextapi/ToastContext";
 
@@ -381,8 +381,6 @@ const PurchaseStockList = () => {
   const [toDate, setToDate]                 = useState(null);
   const [page, setPage]                     = useState(0);
   const [pageSize, setPageSize]             = useState(10);
-  const [totalPages, setTotalPages]         = useState(0);
-  const [totalElements, setTotalElements]   = useState(0);
   const [activeFilter, setActiveFilter]     = useState('all');
   const [selectedStock, setSelectedStock]   = useState(null);
   const [isModalOpen, setIsModalOpen]       = useState(false);
@@ -391,35 +389,41 @@ const PurchaseStockList = () => {
   const [itemToDelete, setItemToDelete]     = useState(null);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const toast    = useToast();
 
   useEffect(() => { injectStyles(); }, []);
+  useEffect(() => {
+    if (location.state?.purchaseNo) {
+      setSearchTerm(location.state.purchaseNo);
+    }
+  }, [location.state?.purchaseNo]);
 
   const fetchStocks = async () => {
     try {
-      const res = await axios.get(`/api/purchase/stock/all-paginated?page=${page}&size=${pageSize}`);
+      const query = searchTerm.trim();
+      const res = await axios.get(`/api/purchase${query ? `?q=${encodeURIComponent(query)}` : ''}`);
       const payload = res.data;
-      setStocks(payload?.content || payload || []);
-      setTotalPages(payload?.totalPages ?? 0);
-      setTotalElements(payload?.totalElements ?? 0);
+      const purchases = Array.isArray(payload) ? payload : payload?.content || payload || [];
+      setStocks(purchases);
     } catch (err) {
       console.error('Error fetching purchase stock:', err);
       setStocks([]);
     }
   };
 
-  useEffect(() => { fetchStocks(); }, [page, pageSize]);
+  useEffect(() => { fetchStocks(); }, [page, pageSize, searchTerm, fromDate, toDate, activeFilter]);
   useEffect(() => { setPage(0); }, [searchTerm, fromDate, toDate, activeFilter]);
 
   const handleReset = () => { setSearchTerm(''); setFromDate(null); setToDate(null); setActiveFilter('all'); setPage(0); };
 
   const handleViewDetails = async (stock) => {
-    const id = stock?.stockId || stock?.itemId;
-    if (!id) { toast.error('Stock ID not available.'); return; }
+    const id = stock?.purchaseId;
+    if (!id) { toast.error('Purchase ID not available.'); return; }
     setIsLoadingDetails(true);
     try {
-      const res = await axios.get(`/api/purchase/stock/${id}`);
-      setSelectedStock(res?.data?.data || res?.data || stock);
+      const res = await axios.get(`/api/purchase/${id}`);
+      setSelectedStock(res?.data || stock);
       setIsModalOpen(true);
     } catch {
       setSelectedStock(stock);
@@ -430,9 +434,9 @@ const PurchaseStockList = () => {
   const openDeleteModal     = (id) => { setItemToDelete(id); setIsDeleteDialogOpen(true); };
   const handleConfirmDelete = async () => {
     try {
-      await axios.delete(`/api/purchase/stock/${itemToDelete}`);
-      setStocks(prev => prev.filter(s => (s.stockId || s.itemId) !== itemToDelete));
-      toast.success('Stock record deleted successfully!');
+      await axios.delete(`/api/purchase/${itemToDelete}`);
+      setStocks(prev => prev.filter(s => (s.purchaseId) !== itemToDelete));
+      toast.success('Purchase deleted successfully!');
     } catch { toast.error('Delete failed.'); }
     finally { setIsDeleteDialogOpen(false); setItemToDelete(null); }
   };
@@ -446,23 +450,16 @@ const PurchaseStockList = () => {
   };
 
   const filteredStocks = stocks.filter(s => {
-    const name = (s.itemName || s.productName || '').toLowerCase();
-    const code = (s.itemCode || s.sku || '').toLowerCase();
-    const po   = (s.poNumber || s.purchaseOrderNo || '').toLowerCase();
-    const sup  = (s.supplierName || s.vendorName || '').toLowerCase();
-    const matchSearch = name.includes(searchTerm.toLowerCase()) || code.includes(searchTerm.toLowerCase()) ||
-      po.includes(searchTerm.toLowerCase()) || sup.includes(searchTerm.toLowerCase());
+    const items = Array.isArray(s.items) ? s.items : [];
+    const itemText = items.map(i => `${i.itemName || ''} ${i.itemCode || ''}`).join(' ').toLowerCase();
+    const po   = (s.purchaseNo || '').toLowerCase();
+    const sup  = (s.supplierName || s.supplierId || '').toString().toLowerCase();
+    const matchSearch = itemText.includes(searchTerm.toLowerCase()) || po.includes(searchTerm.toLowerCase()) || sup.includes(searchTerm.toLowerCase());
 
-    const curr = s.currentStock || s.quantity || 0;
-    const max  = s.maxStock || s.orderedQty || 0;
-    const cls  = stockClass(curr, max);
     let matchFilter = true;
-    if (activeFilter === 'good')     matchFilter = cls === 'good';
-    if (activeFilter === 'low')      matchFilter = cls === 'low';
-    if (activeFilter === 'out')      matchFilter = cls === 'out';
-    if (activeFilter === 'received') matchFilter = (s.status || '').toLowerCase() === 'received';
+    if (activeFilter === 'received') matchFilter = true;
 
-    const sDate = s.receivedDate || s.purchaseDate ? new Date(s.receivedDate || s.purchaseDate) : null;
+    const sDate = s.purchaseDate ? new Date(s.purchaseDate) : null;
     let matchDate = true;
     if (fromDate && sDate && sDate < fromDate) matchDate = false;
     if (toDate && sDate) { const end = new Date(toDate); end.setHours(23,59,59); if (sDate > end) matchDate = false; }
@@ -470,6 +467,8 @@ const PurchaseStockList = () => {
   });
 
   const hasFilter = searchTerm || fromDate || toDate || activeFilter !== 'all';
+  const totalPages = Math.max(1, Math.ceil(filteredStocks.length / pageSize));
+  const displayedStocks = filteredStocks.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
     <div className="psl1-root">
@@ -551,14 +550,15 @@ const PurchaseStockList = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredStocks.length > 0 ? (
-                filteredStocks.map((stock, index) => {
-                  const curr = stock.currentStock || stock.quantity || 0;
-                  const max  = stock.maxStock || stock.orderedQty || 0;
-                  const cls  = stockClass(curr, max);
-                  const pct  = stockPct(curr, max);
+              {displayedStocks.length > 0 ? (
+                displayedStocks.map((stock, index) => {
+                  const items = Array.isArray(stock.items) ? stock.items : [];
+                  const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+                  const firstItem = items[0] || {};
+                  const cls = 'good';
+                  const pct = 100;
                   return (
-                    <tr key={stock.stockId || stock.itemId || index}>
+                    <tr key={stock.purchaseId || stock.purchaseNo || index}>
                       {/* Actions */}
                       <td className="c">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -566,42 +566,39 @@ const PurchaseStockList = () => {
                             onClick={() => handleViewDetails(stock)} disabled={isLoadingDetails}>
                             <VisibilityIcon sx={{ fontSize: 14 }} />
                           </button>
-                          <button className="psl1-action-btn edit" title="Edit Stock"
-                            onClick={() => navigate('/purchase-v1', { state: { stock } })}>
+                          <button className="psl1-action-btn edit" title="Edit Purchase"
+                            onClick={() => navigate('/purchase-stock', { state: { purchase: stock } })}>
                             <EditIcon sx={{ fontSize: 14 }} />
                           </button>
                           <button className="psl1-action-btn del" title="Delete Record"
-                            onClick={() => openDeleteModal(stock.stockId || stock.itemId)}>
+                            onClick={() => openDeleteModal(stock.purchaseId)}>
                             <DeleteIcon sx={{ fontSize: 14 }} />
                           </button>
                         </div>
                       </td>
                       {/* PO Number */}
-                      <td><span className="psl1-po-no">{stock.poNumber || stock.purchaseOrderNo || '—'}</span></td>
+                      <td><span className="psl1-po-no">{stock.purchaseNo || '—'}</span></td>
                       {/* Item */}
                       <td>
-                        <div className="psl1-item-name">{stock.itemName || stock.productName || '—'}</div>
-                        <div className="psl1-item-code">{stock.itemCode || stock.sku || ''}</div>
+                        <div className="psl1-item-name">{items.length > 0 ? `${firstItem.itemName || 'Purchase Item'}` : 'Purchase Items'}</div>
+                        <div className="psl1-item-code">{items.length > 1 ? `${items.length} items` : (firstItem.itemCode || '')}</div>
                       </td>
                       {/* Category */}
-                      <td><span className="psl1-cat">{stock.category || stock.categoryName || 'General'}</span></td>
+                      <td><span className="psl1-cat">Purchase</span></td>
                       {/* Supplier */}
                       <td>
-                        <div className="psl1-supplier">{stock.supplierName || stock.vendorName || '—'}</div>
-                        {(stock.supplierGstin || stock.gstin) && (
-                          <div className="psl1-supplier-sub">{stock.supplierGstin || stock.gstin}</div>
-                        )}
+                        <div className="psl1-supplier">{stock.supplierName || `Supplier ${stock.supplierId || ''}`.trim() || '—'}</div>
                       </td>
                       {/* Rate */}
                       <td className="r">
-                        <span className="psl1-amount normal">₹{fmtINR(stock.purchaseRate || stock.rate || 0)}</span>
+                        <span className="psl1-amount normal">₹{fmtINR(firstItem.rate || 0)}</span>
                       </td>
                       {/* Ordered Qty */}
                       <td className="c" style={{ fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'monospace' }}>
-                        {max || '—'}
+                        {totalQty || '—'}
                       </td>
                       {/* Current Stock */}
-                      <td className="c"><span className={`psl1-qty ${cls}`}>{curr}</span></td>
+                      <td className="c"><span className={`psl1-qty ${cls}`}>{totalQty || 0}</span></td>
                       {/* Stock Level */}
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -611,22 +608,20 @@ const PurchaseStockList = () => {
                               <div className={`psl1-bar-fill ${cls}`} style={{ width: `${pct}%` }} />
                             </div>
                           </div>
-                          {cls === 'low' && <AlertTriangle size={13} color="var(--amber)" />}
-                          {cls === 'out' && <AlertCircle  size={13} color="var(--rose)" />}
                         </div>
                       </td>
                       {/* Total Value */}
                       <td className="r">
                         <span className="psl1-amount total">
-                          ₹{fmtINR(stock.totalValue || stock.purchaseValue || (curr * (stock.purchaseRate || stock.rate || 0)))}
+                          ₹{fmtINR(stock.finalAmount || stock.totalGrossAmount || 0)}
                         </span>
                       </td>
                       {/* Received Date */}
                       <td className="c" style={{ color: 'var(--ink-3)', fontWeight: 500, fontSize: 11 }}>
-                        {fmtDate(stock.receivedDate || stock.purchaseDate)}
+                        {fmtDate(stock.purchaseDate)}
                       </td>
                       {/* Status */}
-                      <td className="c">{renderStatus(stock.status)}</td>
+                      <td className="c">{renderStatus('received')}</td>
                     </tr>
                   );
                 })
@@ -648,7 +643,7 @@ const PurchaseStockList = () => {
         {/* ── Pagination ── */}
         <div className="psl1-footer">
           <p className="psl1-footer-info">
-            Showing <span>{filteredStocks.length}</span> of {totalElements} records
+            Showing <span>{filteredStocks.length}</span> records
           </p>
           <div className="psl1-page-btns">
             <button className="psl1-page-btn" disabled={page === 0} onClick={() => setPage(p => Math.max(p-1, 0))}>
@@ -685,36 +680,20 @@ const PurchaseStockList = () => {
             <div className="psl1-modal-body">
               <div className="psl1-meta-grid">
                 <div className="psl1-meta-item">
-                  <label>PO Number</label>
-                  <p style={{ fontFamily: 'monospace' }}>{selectedStock.poNumber || selectedStock.purchaseOrderNo || '—'}</p>
-                </div>
-                <div className="psl1-meta-item">
-                  <label>Item Code / SKU</label>
-                  <p style={{ fontFamily: 'monospace' }}>{selectedStock.itemCode || selectedStock.sku || '—'}</p>
-                </div>
-                <div className="psl1-meta-item">
-                  <label>HSN Code</label>
-                  <p style={{ fontFamily: 'monospace' }}>{selectedStock.hsnCode || '—'}</p>
-                </div>
-                <div className="psl1-meta-item">
-                  <label>Status</label>
-                  <div>{renderStatus(selectedStock.status)}</div>
+                  <label>Purchase No</label>
+                  <p style={{ fontFamily: 'monospace' }}>{selectedStock.purchaseNo || '—'}</p>
                 </div>
                 <div className="psl1-meta-item">
                   <label>Supplier</label>
-                  <p><User size={12} color="var(--accent)" />{selectedStock.supplierName || selectedStock.vendorName || '—'}</p>
+                  <p><User size={12} color="var(--accent)" />{selectedStock.supplierName || `Supplier ${selectedStock.supplierId || ''}`.trim() || '—'}</p>
                 </div>
                 <div className="psl1-meta-item">
-                  <label>Category</label>
-                  <p>{selectedStock.category || selectedStock.categoryName || '—'}</p>
+                  <label>Status</label>
+                  <div>{renderStatus('received')}</div>
                 </div>
                 <div className="psl1-meta-item">
-                  <label>Received Date</label>
-                  <p><Calendar size={12} color="var(--accent)" />{fmtDate(selectedStock.receivedDate || selectedStock.purchaseDate)}</p>
-                </div>
-                <div className="psl1-meta-item">
-                  <label>GST Rate</label>
-                  <p>{selectedStock.gstRate || 0}%</p>
+                  <label>Purchase Date</label>
+                  <p><Calendar size={12} color="var(--accent)" />{fmtDate(selectedStock.purchaseDate)}</p>
                 </div>
               </div>
 
@@ -723,38 +702,36 @@ const PurchaseStockList = () => {
               <div>
                 <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
                   letterSpacing: '.8px', color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText size={12} color="var(--accent)" /> Batch / Lot Details
+                  <FileText size={12} color="var(--accent)" /> Purchase Items
                 </p>
                 <div className="psl1-inner-table-wrap">
                   <table className="psl1-inner-table">
                     <thead>
                       <tr>
-                        <th>Batch Code</th>
-                        <th className="c">Mfg Date</th>
-                        <th className="c">Expiry Date</th>
+                        <th>Item</th>
+                        <th className="c">HSN</th>
                         <th className="c">Qty</th>
                         <th className="r">Rate</th>
-                        <th className="r">Batch Value</th>
+                        <th className="r">Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedStock.batches || selectedStock.batchDetails || []).length > 0
-                        ? (selectedStock.batches || selectedStock.batchDetails).map((b, i) => (
+                      {(selectedStock.items || []).length > 0
+                        ? (selectedStock.items || []).map((item, i) => (
                           <tr key={i}>
-                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{b.batchCode || '—'}</td>
-                            <td className="c" style={{ fontSize: 11 }}>{fmtDate(b.mfgDate)}</td>
-                            <td className="c" style={{ fontSize: 11, color: 'var(--amber)', fontWeight: 600 }}>{fmtDate(b.expiryDate)}</td>
-                            <td className="c" style={{ fontWeight: 700 }}>{b.quantity || 0}</td>
-                            <td className="r">₹{fmtINR(b.rate)}</td>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{item.itemName || item.itemCode || '—'}</td>
+                            <td className="c" style={{ fontSize: 11 }}>{item.hsnCode || '—'}</td>
+                            <td className="c" style={{ fontWeight: 700 }}>{item.quantity || 0}</td>
+                            <td className="r">₹{fmtINR(item.rate)}</td>
                             <td className="r" style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                              ₹{fmtINR((b.quantity || 0) * (b.rate || 0))}
+                              ₹{fmtINR(item.lineTotal || ((item.quantity || 0) * (item.rate || 0)))}
                             </td>
                           </tr>
                         ))
                         : (
                           <tr>
-                            <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-4)', fontStyle: 'italic', fontSize: 12 }}>
-                              No batch records found for this item.
+                            <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-4)', fontStyle: 'italic', fontSize: 12 }}>
+                              No items found for this purchase.
                             </td>
                           </tr>
                         )
@@ -766,29 +743,28 @@ const PurchaseStockList = () => {
 
               <div className="psl1-summary">
                 <div className="psl1-summary-big">
-                  <label>Total Stock Value</label>
-                  <p>₹{fmtINR(selectedStock.totalValue || selectedStock.purchaseValue ||
-                    ((selectedStock.currentStock || 0) * (selectedStock.purchaseRate || selectedStock.rate || 0)))}</p>
+                  <label>Total Amount</label>
+                  <p>₹{fmtINR(selectedStock.finalAmount || selectedStock.totalGrossAmount || 0)}</p>
                 </div>
                 <div className="psl1-summary-stats">
                   <div className="psl1-stat-item green">
-                    <label>Current Stock</label>
-                    <p>{selectedStock.currentStock || selectedStock.quantity || 0} units</p>
+                    <label>Items</label>
+                    <p>{(selectedStock.items || []).length} line items</p>
                   </div>
                   <div className="psl1-stat-item amber">
-                    <label>Reorder Level</label>
-                    <p>{selectedStock.reorderLevel || selectedStock.minStock || '—'}</p>
+                    <label>Qty</label>
+                    <p>{(selectedStock.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} units</p>
                   </div>
                   <div className="psl1-stat-item teal">
-                    <label>Unit Rate</label>
-                    <p>₹{fmtINR(selectedStock.purchaseRate || selectedStock.rate || 0)}</p>
+                    <label>Disc / Tax</label>
+                    <p>₹{fmtINR(selectedStock.totalDiscount || 0)}</p>
                   </div>
                 </div>
               </div>
             </div>
             <div className="psl1-modal-footer">
               <button onClick={() => setIsModalOpen(false)} className="psl1-btn psl1-btn-outline">Close Preview</button>
-              <button onClick={() => { setIsModalOpen(false); navigate('/purchase-v1', { state: { stock: selectedStock } }); }}
+              <button onClick={() => { setIsModalOpen(false); navigate('/purchase-stock', { state: { purchase: selectedStock } }); }}
                 className="psl1-btn psl1-btn-primary">
                 <EditIcon sx={{ fontSize: 14, marginRight: '4px' }} /> Edit Stock Entry
               </button>
