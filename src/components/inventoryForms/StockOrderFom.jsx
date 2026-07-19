@@ -1,20 +1,25 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
   Save,
   RotateCcw,
   Plus,
   Trash2,
+  Truck,
+  CalendarDays,
+  FileText,
+  XCircle,
+  List,
+  IndianRupee,
+  Package,
 } from "lucide-react";
 
 const StockOrderForm = () => {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState([
-    {
-      itemName: "",
-      quantity: "",
-      rate: "",
-      amount: "",
-    },
+    { itemName: "", quantity: "", rate: "", amount: "" },
   ]);
 
   const [formData, setFormData] = useState({
@@ -24,7 +29,6 @@ const StockOrderForm = () => {
     remarks: "",
   });
 
-  // Handle Top Form
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -32,333 +36,290 @@ const StockOrderForm = () => {
     });
   };
 
-  // Handle Item Change
   const handleItemChange = (index, e) => {
     const values = [...items];
-
     values[index][e.target.name] = e.target.value;
 
-    // Auto Amount Calculate
-    if (
-      e.target.name === "quantity" ||
-      e.target.name === "rate"
-    ) {
-      const qty =
-        e.target.name === "quantity"
-          ? e.target.value
-          : values[index].quantity;
-
-      const rate =
-        e.target.name === "rate"
-          ? e.target.value
-          : values[index].rate;
-
+    if (e.target.name === "quantity" || e.target.name === "rate") {
+      const qty = e.target.name === "quantity" ? e.target.value : values[index].quantity;
+      const rate = e.target.name === "rate" ? e.target.value : values[index].rate;
       values[index].amount = qty * rate;
     }
 
     setItems(values);
   };
 
-  // Add Item Row
   const addItem = () => {
-    setItems([
-      ...items,
-      {
-        itemName: "",
-        quantity: "",
-        rate: "",
-        amount: "",
-      },
-    ]);
+    setItems([...items, { itemName: "", quantity: "", rate: "", amount: "" }]);
   };
 
-  // Remove Item Row
   const removeItem = (index) => {
     const values = [...items];
-
     values.splice(index, 1);
-
     setItems(values);
   };
 
-  // Total Amount
-  const totalAmount = items.reduce(
-    (acc, item) => acc + Number(item.amount || 0),
-    0
-  );
+  const totalAmount = items.reduce((acc, item) => acc + Number(item.amount || 0), 0);
 
-  // Submit
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    const finalData = {
-      ...formData,
-      items,
-      totalAmount,
-    };
-
+    const finalData = { ...formData, items, totalAmount };
     console.log(finalData);
-
     alert("Stock Order Saved Successfully");
   };
 
-  // Reset
   const handleReset = () => {
-    setFormData({
-      supplier: "",
-      orderDate: "",
-      status: "",
-      remarks: "",
-    });
-
-    setItems([
-      {
-        itemName: "",
-        quantity: "",
-        rate: "",
-        amount: "",
-      },
-    ]);
+    setFormData({ supplier: "", orderDate: "", status: "", remarks: "" });
+    setItems([{ itemName: "", quantity: "", rate: "", amount: "" }]);
   };
 
+  const labelCls = "text-slate-500 font-bold uppercase block mb-1.5 text-[10px]";
+  const inputCls =
+    "w-full border border-indigo-200 rounded-md p-2 bg-white outline-none shadow-sm focus:ring-2 focus:ring-indigo-400 transition-all text-sm";
+
   return (
-    <div className="min-h-screen bg-gray-100 p-3 md:p-4">
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
-        <div className="flex items-center gap-2">
-          <div className="bg-blue-100 p-2 rounded-lg">
-            <ShoppingCart
-              className="text-blue-600"
-              size={18}
-            />
+    <div
+      className="min-h-screen p-2 sm:p-4 md:p-3 text-[12px] font-sans text-slate-700"
+      style={{ background: "linear-gradient(135deg, #eef2ff 0%, #f0f9ff 30%, #f8fafc 100%)" }}
+    >
+      <div className="max-w-[1500px] mx-auto bg-white rounded-xl overflow-hidden border border-indigo-200 shadow-xl shadow-indigo-100/50">
+        {/* ─── STICKY TOP ACTION BAR ─── */}
+        <div className="flex bg-gradient-to-r from-indigo-950 via-indigo-900 to-sky-950 text-white p-3 gap-3 items-center border-b border-white/10 shadow-lg">
+          <div className="flex items-center gap-3 pr-4 border-r border-indigo-400/30 mr-2">
+            <div className="bg-gradient-to-br from-indigo-400 to-sky-600 p-2 rounded-xl shadow-inner ring-1 ring-white/20">
+              <ShoppingCart size={20} className="text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm tracking-tight text-white uppercase">
+                Stock Order Entry
+              </span>
+              <span className="text-[10px] text-indigo-300 font-medium tracking-widest">
+                Create &amp; Manage Purchase Orders
+              </span>
+            </div>
           </div>
 
-          <div>
-            <h1 className="text-lg font-bold text-gray-800">
-              Stock Order Form
-            </h1>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Create and manage medicine stock orders
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Form */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-xl shadow-sm border border-gray-200 mt-4 p-4"
-      >
-        {/* Top Form */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Supplier */}
-          <div>
-            <label className="text-xs font-medium text-gray-700">
-              Supplier Name
-            </label>
-
-            <input
-              type="text"
-              name="supplier"
-              value={formData.supplier}
-              onChange={handleChange}
-              placeholder="Enter supplier name"
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-200"
-            />
-          </div>
-
-          {/* Order Date */}
-          <div>
-            <label className="text-xs font-medium text-gray-700">
-              Order Date
-            </label>
-
-            <input
-              type="date"
-              name="orderDate"
-              value={formData.orderDate}
-              onChange={handleChange}
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-200"
-            />
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="text-xs font-medium text-gray-700">
-              Order Status
-            </label>
-
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-200"
+          <div className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-700/40 rounded-lg border border-indigo-500/30">
+            <button
+              onClick={() => navigate("/stock-order")}
+              className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-indigo-200 hover:text-white"
             >
-              <option value="">Select Status</option>
-              <option>Pending</option>
-              <option>Processing</option>
-              <option>Completed</option>
-            </select>
+              <List size={13} /> View List
+            </button>
           </div>
         </div>
 
-        {/* Items Table */}
-        <div className="mt-5 overflow-x-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Order Items
-            </h2>
+        <form onSubmit={handleSubmit}>
+          {/* ─── SECTION 1: ORDER DETAILS ─── */}
+          <div className="grid grid-cols-12 bg-gradient-to-br from-indigo-50 via-sky-50 to-white border-b border-indigo-200">
+            <div className="col-span-12 p-3 bg-indigo-100/50 flex items-center justify-between border-b border-indigo-200">
+              <div className="flex items-center gap-2">
+                <Truck size={14} className="text-indigo-800" />
+                <span className="font-bold text-indigo-800 uppercase tracking-wider text-[10px]">
+                  Order Details
+                </span>
+              </div>
+            </div>
+
+            <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-indigo-200/50 bg-white/40">
+              <label className={labelCls}>Supplier Name</label>
+              <div className="relative">
+                <Truck size={14} className="absolute left-3 top-3 text-indigo-400" />
+                <input
+                  type="text"
+                  name="supplier"
+                  value={formData.supplier}
+                  onChange={handleChange}
+                  placeholder="Enter supplier name"
+                  className={`${inputCls} pl-9 font-semibold`}
+                />
+              </div>
+            </div>
+
+            <div className="col-span-12 md:col-span-4 p-4 border-r border-b border-indigo-200/50">
+              <label className={labelCls}>Order Date</label>
+              <div className="relative">
+                <CalendarDays size={14} className="absolute left-3 top-3 text-indigo-400 pointer-events-none" />
+                <input
+                  type="date"
+                  name="orderDate"
+                  value={formData.orderDate}
+                  onChange={handleChange}
+                  className={`${inputCls} pl-9 font-semibold`}
+                />
+              </div>
+            </div>
+
+            <div className="col-span-12 md:col-span-4 p-4 border-b border-indigo-200/50 bg-sky-50/40">
+              <label className="text-sky-600 font-bold uppercase block mb-1.5 text-[10px]">Order Status</label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className={`${inputCls} border-sky-200 font-semibold text-sky-700`}
+              >
+                <option value="">Select Status</option>
+                <option>Pending</option>
+                <option>Processing</option>
+                <option>Completed</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ─── SECTION 2: ORDER ITEMS ─── */}
+          <div className="border-b border-indigo-200">
+            <div className="p-3 bg-sky-100/40 flex items-center justify-between border-b border-indigo-200">
+              <div className="flex items-center gap-2">
+                <Package size={14} className="text-sky-800" />
+                <span className="font-bold text-sky-800 uppercase tracking-wider text-[10px]">
+                  Order Items
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-sky-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide hover:from-indigo-700 hover:to-sky-700 transition-all shadow-sm"
+              >
+                <Plus size={13} /> Add Item
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead className="bg-gradient-to-r from-indigo-950 via-indigo-900 to-sky-950 text-white text-[10px] uppercase tracking-widest">
+                  <tr>
+                    <th className="p-3 text-center w-12">Sr.</th>
+                    <th className="p-3 text-left min-w-[220px]">Item Name</th>
+                    <th className="p-3 text-center w-24">Qty</th>
+                    <th className="p-3 text-center w-28">Rate</th>
+                    <th className="p-3 text-right w-32">Amount</th>
+                    <th className="p-3 text-center w-20">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-indigo-50">
+                  {items.map((item, index) => (
+                    <tr key={index} className="hover:bg-indigo-50/40 transition-colors">
+                      <td className="p-3 text-center text-xs text-indigo-300 font-mono">{index + 1}</td>
+
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          name="itemName"
+                          value={item.itemName}
+                          onChange={(e) => handleItemChange(index, e)}
+                          placeholder="Enter item name"
+                          className="w-full border border-indigo-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-semibold"
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          name="quantity"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, e)}
+                          placeholder="0"
+                          className="w-full border border-indigo-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 text-right font-mono transition-all"
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <div className="relative">
+                          <IndianRupee size={11} className="absolute left-2 top-2.5 text-indigo-300" />
+                          <input
+                            type="number"
+                            name="rate"
+                            value={item.rate}
+                            onChange={(e) => handleItemChange(index, e)}
+                            placeholder="0.00"
+                            className="w-full border border-indigo-200 rounded-md pl-6 pr-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 text-right font-mono transition-all"
+                          />
+                        </div>
+                      </td>
+
+                      <td className="p-2 text-right">
+                        <span className="text-sm font-bold text-indigo-700 font-mono">
+                          ₹{Number(item.amount || 0).toLocaleString("en-IN")}
+                        </span>
+                      </td>
+
+                      <td className="p-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          disabled={items.length === 1}
+                          className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center mx-auto transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ─── TOTAL AMOUNT ─── */}
+          <div className="flex justify-end p-5 bg-indigo-50/20 border-b border-indigo-100">
+            <div className="bg-gradient-to-br from-indigo-50 to-sky-50 border border-indigo-200 rounded-xl px-6 py-3 shadow-sm">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 block mb-1">
+                Total Order Amount
+              </span>
+              <span className="text-2xl font-black text-indigo-700 font-mono">
+                ₹{totalAmount.toLocaleString("en-IN")}
+              </span>
+            </div>
+          </div>
+
+          {/* ─── REMARKS ─── */}
+          <div className="col-span-12 p-6 bg-indigo-50/20 border-b border-indigo-100">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText size={14} className="text-indigo-500" />
+              <span className="text-slate-700 font-bold uppercase text-[11px] tracking-widest">
+                Remarks / Internal Notes
+              </span>
+            </div>
+            <textarea
+              rows="3"
+              name="remarks"
+              value={formData.remarks}
+              onChange={handleChange}
+              placeholder="Enter remarks..."
+              className="w-full bg-white border border-indigo-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-400 outline-none text-slate-600 text-sm resize-none"
+            ></textarea>
+          </div>
+
+          {/* ─── STICKY BOTTOM ACTION BAR ─── */}
+          <div className="flex bg-indigo-950/95 backdrop-blur-md text-white p-3 gap-3 items-center">
+            <button
+              type="submit"
+              className="flex items-center gap-2.5 bg-gradient-to-b from-indigo-500 to-sky-600 hover:from-indigo-400 hover:to-sky-500 px-6 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg shadow-indigo-900/40 active:scale-95 border-t border-indigo-400/30"
+            >
+              <Save size={16} strokeWidth={2.5} />
+              Save Order
+            </button>
 
             <button
               type="button"
-              onClick={addItem}
-              className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+              onClick={handleReset}
+              className="flex items-center gap-2.5 bg-indigo-900 hover:bg-indigo-800 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider border border-indigo-700 transition-all active:bg-indigo-950"
             >
-              <Plus size={14} />
-              Add Item
+              <RotateCcw size={16} className="text-indigo-300" />
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/stock-order")}
+              className="flex items-center gap-2.5 text-indigo-400 hover:text-rose-400 hover:bg-rose-500/10 px-4 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider ml-auto transition-all group"
+            >
+              <XCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+              Cancel
             </button>
           </div>
-
-          <table className="w-full min-w-[750px] border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50">
-              <tr className="text-left text-xs text-gray-600">
-                <th className="px-3 py-2">Item Name</th>
-
-                <th className="px-3 py-2">Qty</th>
-
-                <th className="px-3 py-2">Rate</th>
-
-                <th className="px-3 py-2">Amount</th>
-
-                <th className="px-3 py-2 text-center">
-                  Action
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {items.map((item, index) => (
-                <tr
-                  key={index}
-                  className="border-t border-gray-100"
-                >
-                  {/* Item Name */}
-                  <td className="px-3 py-2">
-                    <input
-                      type="text"
-                      name="itemName"
-                      value={item.itemName}
-                      onChange={(e) =>
-                        handleItemChange(index, e)
-                      }
-                      placeholder="Enter item"
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-200"
-                    />
-                  </td>
-
-                  {/* Quantity */}
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      name="quantity"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        handleItemChange(index, e)
-                      }
-                      placeholder="Qty"
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-200"
-                    />
-                  </td>
-
-                  {/* Rate */}
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      name="rate"
-                      value={item.rate}
-                      onChange={(e) =>
-                        handleItemChange(index, e)
-                      }
-                      placeholder="Rate"
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-200"
-                    />
-                  </td>
-
-                  {/* Amount */}
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={item.amount}
-                      readOnly
-                      className="w-full bg-gray-100 border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
-                    />
-                  </td>
-
-                  {/* Delete */}
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Total */}
-        <div className="flex justify-end mt-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Total Amount :
-              <span className="text-blue-600 ml-2">
-                ₹{totalAmount}
-              </span>
-            </h2>
-          </div>
-        </div>
-
-        {/* Remarks */}
-        <div className="mt-4">
-          <label className="text-xs font-medium text-gray-700">
-            Remarks
-          </label>
-
-          <textarea
-            rows="3"
-            name="remarks"
-            value={formData.remarks}
-            onChange={handleChange}
-            placeholder="Enter remarks..."
-            className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-200 resize-none"
-          ></textarea>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex flex-wrap gap-3 mt-5">
-          <button
-            type="submit"
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
-            <Save size={16} />
-            Save Order
-          </button>
-
-          <button
-            type="button"
-            onClick={handleReset}
-            className="flex items-center gap-2 border border-gray-300 bg-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-          >
-            <RotateCcw size={16} />
-            Reset
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 };
