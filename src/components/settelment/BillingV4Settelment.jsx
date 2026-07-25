@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   Save,
@@ -19,8 +19,12 @@ import "react-datepicker/dist/react-datepicker.css";
 import MultiTransaction from "../contextapi/MultiTransaction";
 import { usePayment } from "../contextapi/PaymentContext";
 
+// Route of the Billing List page — adjust if your actual route differs.
+const BILLING_LIST_ROUTE = "/billing-list-v4";
+
 const SettlementV1 = () => {
   const { setShowPaymentModal } = usePayment();
+  const navigate = useNavigate();
   const [settlementNo, setSettlementNo] = useState("SET-2026-001");
   const [settlementDate, setSettlementDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -121,6 +125,30 @@ const SettlementV1 = () => {
       console.log("Response :", response.data);
 
       alert("Settlement Saved Successfully");
+
+      // ── Post-save cleanup ────────────────────────────────
+      // Never leave stale invoice/payment data lying around after a
+      // successful settlement — the invoice's status and balance have
+      // just changed on the server, so the frontend must not keep
+      // showing what it had before the save.
+
+      // 1. Close the payment modal.
+      setShowPaymentModal(false);
+
+      // 2. Clear this screen's saved payment draft from localStorage.
+      localStorage.removeItem(`payments_${screenKey}`);
+      localStorage.removeItem("activePaymentScreen");
+
+      // 3. Refetch this invoice so the table reflects the new balance
+      //    (useful if the user stays on the page for a moment before
+      //    the redirect below takes effect).
+      if (invoiceId) {
+        await fetchPendingInvoices();
+      }
+
+      // 4. Redirect to the Billing List — it will fetch fresh data
+      //    (updated status + pending amount) on mount.
+      navigate(BILLING_LIST_ROUTE);
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.message || "Settlement Save Failed");

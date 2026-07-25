@@ -724,9 +724,17 @@ const BillingV4List = () => {
 
     useEffect(() => { injectStyles(); }, []);
 
+    const toIsoDate = (d) => (d ? new Date(d).toISOString().split("T")[0] : null);
+
     const fetchInvoices = async () => {
         try {
-            const res = await axios.get(`/api/invoice/balance/all-paginated?page=${page}&size=${pageSize}`);
+            const params = { page, size: pageSize };
+            const from = toIsoDate(fromDate);
+            const to = toIsoDate(toDate);
+            if (from) params.fromDate = from;
+            if (to) params.toDate = to;
+
+            const res = await axios.get(`/api/invoice/balance/date-range-paginated`, { params });
             const payload = res.data;
             setInvoices(payload?.content || payload || []);
             setTotalPages(payload?.totalPages ?? 0);
@@ -737,7 +745,8 @@ const BillingV4List = () => {
         }
     };
 
-    useEffect(() => { fetchInvoices(); }, [page, pageSize]);
+    // Date range is filtered server-side, so refetch whenever page, size, or dates change.
+    useEffect(() => { fetchInvoices(); }, [page, pageSize, fromDate, toDate]);
     useEffect(() => { setPage(0); }, [searchTerm, fromDate, toDate]);
 
     const handleReset = () => { setSearchTerm(""); setFromDate(null); setToDate(null); setPage(0); };
@@ -769,23 +778,31 @@ const BillingV4List = () => {
     };
 
     /* ── Status Badge ── */
+    // Always trust the backend's status + balanceAmount — never re-derive pending
+    // amounts on the frontend. Settlement navigation is allowed only when the
+    // backend says the invoice is Partially Paid or Unpaid.
     const renderStatus = (status, invoice) => {
         const s = status?.toString().trim().toLowerCase();
-        if (s === "completed" || s === "paid" || s === "full")
+        const balanceAmount = Number(invoice?.balanceAmount ?? 0);
+
+        // Paid, or nothing left to settle -> static badge, no settlement action.
+        if (s === "completed" || s === "paid" || s === "full" || balanceAmount <= 0)
             return <span className="bv4-badge paid"><CheckCircle2 size={9} strokeWidth={3} />Paid</span>;
 
-        if (s === "partial pending" || s === "partial")
+        const invoiceId = invoice?.invoiceId || invoice?.balanceId;
+
+        if (s === "partially paid" || s === "partial pending" || s === "partial")
             return (
                 <button className="bv4-badge partial"
-                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.balance?.invoiceId || invoice.invoiceId || invoice.balanceId}`)}>
+                    onClick={() => invoiceId && navigate(`/billing-settlement-v4?invoiceId=${invoiceId}`)}>
                     <Clock size={9} strokeWidth={3} />Partial
                 </button>
             );
 
-        if (s === "pending" || s === "unpaid" || s === "due")
+        if (s === "unpaid" || s === "pending" || s === "due")
             return (
                 <button className="bv4-badge pending"
-                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.balance?.invoiceId || invoice.invoiceId || invoice.balanceId}`)}>
+                    onClick={() => invoiceId && navigate(`/billing-settlement-v4?invoiceId=${invoiceId}`)}>
                     <AlertCircle size={9} strokeWidth={3} />Pending
                 </button>
             );
@@ -856,18 +873,12 @@ const BillingV4List = () => {
     };
 
     /* ── Filtered data ── */
+    // Date range is already applied by the backend (date-range-paginated).
+    // Only text search happens client-side here.
     const filteredInvoices = invoices.filter(inv => {
         const name = (inv.unitName || inv.customer?.customerName || inv.customerName || "").toLowerCase();
         const invNo = (inv.invoiceNo || "").toLowerCase();
-        const matchesSearch = invNo.includes(searchTerm.toLowerCase()) || name.includes(searchTerm.toLowerCase());
-        const invDate = inv.invoiceDate ? new Date(inv.invoiceDate) : null;
-        let matchesDate = true;
-        if (fromDate && invDate && invDate < fromDate) matchesDate = false;
-        if (toDate && invDate) {
-            const end = new Date(toDate); end.setHours(23, 59, 59);
-            if (invDate > end) matchesDate = false;
-        }
-        return matchesSearch && matchesDate;
+        return invNo.includes(searchTerm.toLowerCase()) || name.includes(searchTerm.toLowerCase());
     });
 
     /* ── Modal amounts ── */
@@ -1031,11 +1042,10 @@ const BillingV4List = () => {
 
         filteredInvoices.map((inv, index) => {
 
-            // Use backend-computed balance figures instead of re-deriving
-            // paid/pending from status locally.
-            const bal = inv.balance || {};
-            const totalPaid = Number(bal.paidAmount || 0);
-            const pendingAmount = Number(bal.balanceAmount || 0);
+            // Backend (date-range-paginated) sends invoiceAmount, paidAmount,
+            // balanceAmount, and status directly on each record — use them as-is.
+            const totalPaid = Number(inv.paidAmount || 0);
+            const pendingAmount = Number(inv.balanceAmount || 0);
 
             return (
                 <tr key={inv.balanceId || inv.invoiceId || index}>

@@ -27,10 +27,10 @@ const INITIAL_FILTERS = {
 };
 
 const INITIAL_SUMMARY = {
-  totalBillAmt: 0,
-  totalPaidAmt: 0,
-  totalSettlementAmt: 0,
-  totalCurrentPending: 0,
+  totalBillAmount: 0,
+  totalPaidAmount: 0,
+  totalSettlementAmount: 0,
+  totalPendingAmount: 0,
 };
 
 /* ── helpers ── */
@@ -69,9 +69,10 @@ function SummaryCard({ label, value, colorClass }) {
 
 /* ══════════════════════════════════════════════
    MAIN COMPONENT
-   Single source of truth: GET /api/reports/bill-settlement/paginated
-   — table rows, summary cards, and pagination all come from
-   this one response. No other bill settlement endpoint is called.
+   Single source of truth: GET /api/invoice/settlements/report
+   — table rows (`entries`), summary cards (`totals`), and
+   pagination all come from this one response. No other bill
+   settlement endpoint is called.
 ══════════════════════════════════════════════ */
 export default function BillSettlementReport() {
   const { error, info } = useToast();
@@ -101,7 +102,7 @@ export default function BillSettlementReport() {
       });
 
       const response = await fetch(
-        `http://localhost:8081/api/reports/bill-settlement/paginated?${params.toString()}`,
+        `http://localhost:8081/api/invoice/settlements/report?${params.toString()}`,
       );
 
       if (!response.ok) {
@@ -109,24 +110,24 @@ export default function BillSettlementReport() {
       }
 
       const result = await response.json();
-      const page = result.settlementsPage || {};
+      const totals = result.totals || {};
 
       // Table rows
-      setSettlementData(page.content || []);
+      setSettlementData(result.entries || []);
 
       // Summary cards
       setSummary({
-        totalBillAmt: result.totalBillAmt || 0,
-        totalPaidAmt: result.totalPaidAmt || 0,
-        totalSettlementAmt: result.totalSettlementAmt || 0,
-        totalCurrentPending: result.totalCurrentPending || 0,
+        totalBillAmount: totals.totalBillAmount || 0,
+        totalPaidAmount: totals.totalPaidAmount || 0,
+        totalSettlementAmount: totals.totalSettlementAmount || 0,
+        totalPendingAmount: totals.totalPendingAmount || 0,
       });
 
       // Pagination — synced with backend's own page state
-      setTotalPages(Math.max(1, page.totalPages || 1));
-      setTotalRecords(page.totalElements || 0);
-      if (typeof page.pageNumber === "number") {
-        setCurrentPage(page.pageNumber + 1); // back to 1-indexed for the UI
+      setTotalPages(Math.max(1, result.totalPages || 1));
+      setTotalRecords(result.totalElements || 0);
+      if (typeof result.pageNumber === "number") {
+        setCurrentPage(result.pageNumber + 1); // back to 1-indexed for the UI
       }
     } catch (err) {
       console.error(err);
@@ -141,7 +142,7 @@ export default function BillSettlementReport() {
   };
 
   // Every trigger — initial load, Search, filter change, page change —
-  // funnels through this one effect, which calls the one paginated API.
+  // funnels through this one effect, which calls the one report API.
   useEffect(() => {
     fetchSettlementReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,22 +251,22 @@ export default function BillSettlementReport() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-6 py-4">
         <SummaryCard
           label="Total Bill Amt"
-          value={inr(summary.totalBillAmt)}
+          value={inr(summary.totalBillAmount)}
           colorClass="text-slate-800"
         />
         <SummaryCard
           label="Total Paid Amt"
-          value={inr(summary.totalPaidAmt)}
+          value={inr(summary.totalPaidAmount)}
           colorClass="text-emerald-600"
         />
         <SummaryCard
           label="Total Settlement Amt"
-          value={inr(summary.totalSettlementAmt)}
+          value={inr(summary.totalSettlementAmount)}
           colorClass="text-blue-600"
         />
         <SummaryCard
           label="Current Pending"
-          value={inr(summary.totalCurrentPending)}
+          value={inr(summary.totalPendingAmount)}
           colorClass="text-rose-600"
         />
       </div>
