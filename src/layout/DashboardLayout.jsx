@@ -167,6 +167,7 @@ const initialMenu = [
         children: [
           { key: "bill-report", title: "Billing Report", path: "bill-report" },
           { key: "billreturn-report", title: "Bill Return Report", path: "billreturn-report" },
+          { key: "billsettlement-report", title: "Bill Settlement Report", path: "billsettlement-report" },
         ],
       },
       {

@@ -126,6 +126,7 @@ import FinalStockReport from "./components/reports/stocks/FinalStockReport"
 // Billing Report
 import BillReport from "./components/reports/billing/BillReport";
 import BillReturnReport from "./components/reports/billing/BillReturnReport"
+import BillSettlementReport from "./components/reports/billing/BillSettelmentReport"
 
 // GST Report
 import GSTReport from "./components/reports/gstreports/GSTReport";
@@ -276,6 +277,7 @@ export default function App() {
 
                 <Route path="bill-report" element={<BillReport />} />
                 <Route path="billreturn-report" element={<BillReturnReport />} />
+                <Route path="billsettlement-report" element={<BillSettlementReport />} />
                 
                 
                 <Route path="gst-report" element={<GSTReport />} />

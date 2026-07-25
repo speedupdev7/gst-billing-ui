@@ -777,7 +777,7 @@ const BillingV4List = () => {
         if (s === "partial pending" || s === "partial")
             return (
                 <button className="bv4-badge partial"
-                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.invoiceId || invoice.balanceId}`)}>
+                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.balance?.invoiceId || invoice.invoiceId || invoice.balanceId}`)}>
                     <Clock size={9} strokeWidth={3} />Partial
                 </button>
             );
@@ -785,7 +785,7 @@ const BillingV4List = () => {
         if (s === "pending" || s === "unpaid" || s === "due")
             return (
                 <button className="bv4-badge pending"
-                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.invoiceId || invoice.balanceId}`)}>
+                    onClick={() => invoice && navigate(`/billing-settlement-v4?invoiceId=${invoice.balance?.invoiceId || invoice.invoiceId || invoice.balanceId}`)}>
                     <AlertCircle size={9} strokeWidth={3} />Pending
                 </button>
             );
@@ -1031,18 +1031,11 @@ const BillingV4List = () => {
 
         filteredInvoices.map((inv, index) => {
 
-            const billAmount = Number(inv.invoiceAmount || 0);
-
-            let pendingAmount = 0;
-            let totalPaid = 0;
-
-            if (inv.status?.toLowerCase() === "paid") {
-                totalPaid = billAmount;
-                pendingAmount = 0;
-            } else {
-                pendingAmount = billAmount;
-                totalPaid = 0;
-            }
+            // Use backend-computed balance figures instead of re-deriving
+            // paid/pending from status locally.
+            const bal = inv.balance || {};
+            const totalPaid = Number(bal.paidAmount || 0);
+            const pendingAmount = Number(bal.balanceAmount || 0);
 
             return (
                 <tr key={inv.balanceId || inv.invoiceId || index}>
