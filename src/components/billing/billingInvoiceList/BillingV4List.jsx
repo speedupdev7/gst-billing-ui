@@ -734,7 +734,7 @@ const BillingV4List = () => {
             if (from) params.fromDate = from;
             if (to) params.toDate = to;
 
-            const res = await axios.get(`/api/invoice/balance/date-range-paginated`, { params });
+            const res = await axios.get(`/api/invoice/balance/all-paginated`, { params });
             const payload = res.data;
             setInvoices(payload?.content || payload || []);
             setTotalPages(payload?.totalPages ?? 0);
@@ -778,15 +778,15 @@ const BillingV4List = () => {
     };
 
     /* ── Status Badge ── */
-    // Always trust the backend's status + balanceAmount — never re-derive pending
+    // Always trust the backend's status + pendingAmount — never re-derive pending
     // amounts on the frontend. Settlement navigation is allowed only when the
     // backend says the invoice is Partially Paid or Unpaid.
     const renderStatus = (status, invoice) => {
         const s = status?.toString().trim().toLowerCase();
-        const balanceAmount = Number(invoice?.balanceAmount ?? 0);
+        const pendingAmount = Number(invoice?.pendingAmount ?? 0);
 
         // Paid, or nothing left to settle -> static badge, no settlement action.
-        if (s === "completed" || s === "paid" || s === "full" || balanceAmount <= 0)
+        if (s === "completed" || s === "paid" || s === "full" || pendingAmount <= 0)
             return <span className="bv4-badge paid"><CheckCircle2 size={9} strokeWidth={3} />Paid</span>;
 
         const invoiceId = invoice?.invoiceId || invoice?.balanceId;
@@ -884,8 +884,8 @@ const BillingV4List = () => {
     /* ── Modal amounts ── */
     const selectedBalance = selectedInvoice?.balance || selectedInvoice;
     const netPayableAmount = selectedBalance?.invoiceAmount ?? selectedInvoice?.invoiceAmount ?? 0;
-    const paidAmount = selectedBalance?.paidAmount ?? (netPayableAmount - (selectedBalance?.balanceAmount ?? selectedInvoice?.balanceAmount ?? 0));
-    const dueBalanceAmount = selectedBalance?.balanceAmount ?? selectedInvoice?.balanceAmount ?? 0;
+    const paidAmount = selectedBalance?.paidAmount ?? (netPayableAmount - (selectedBalance?.pendingAmount ?? selectedInvoice?.pendingAmount ?? 0));
+    const dueBalanceAmount = selectedBalance?.pendingAmount ?? selectedInvoice?.pendingAmount ?? 0;
 
     const fmtINR = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2 });
     const hasFilter = searchTerm || fromDate || toDate;
@@ -1043,9 +1043,9 @@ const BillingV4List = () => {
         filteredInvoices.map((inv, index) => {
 
             // Backend (date-range-paginated) sends invoiceAmount, paidAmount,
-            // balanceAmount, and status directly on each record — use them as-is.
+            // pendingAmount, and status directly on each record — use them as-is.
             const totalPaid = Number(inv.paidAmount || 0);
-            const pendingAmount = Number(inv.balanceAmount || 0);
+            const pendingAmount = Number(inv.pendingAmount || 0);
 
             return (
                 <tr key={inv.balanceId || inv.invoiceId || index}>
@@ -1260,7 +1260,7 @@ const BillingV4List = () => {
                                 </div>
                                 <div className="bv4-meta-item">
                                     <label>Status</label>
-                                    <div>{renderStatus(selectedInvoice.status)}</div>
+                                    <div>{renderStatus(selectedInvoice.status, selectedInvoice)}</div>
                                 </div>
                             </div>
 

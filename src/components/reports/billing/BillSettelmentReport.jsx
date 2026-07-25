@@ -9,7 +9,7 @@ import {
   ChevronRight,
   CheckCircle,
   Clock,
-  XCircle,
+  AlertCircle,
   Wallet,
 } from "lucide-react";
 
@@ -37,20 +37,28 @@ const INITIAL_SUMMARY = {
 const inr = (n) =>
   "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-/* ── status config ── */
+/* ── status config ──
+   Backend's actual billStatus values: Paid, Partially Paid, Pending.
+   Note: /api/invoice/settlements/report has no `status` query param yet —
+   this dropdown is UI-only for now and filters nothing server-side. */
 const STATUS_CONFIG = {
-  Settled: {
+  Paid: {
     icon: <CheckCircle className="w-3 h-3" />,
     cls: "bg-emerald-50 text-emerald-700 border border-emerald-200",
   },
-  Pending: {
+  "Partially Paid": {
     icon: <Clock className="w-3 h-3" />,
     cls: "bg-amber-50 text-amber-700 border border-amber-200",
   },
-  Cancelled: {
-    icon: <XCircle className="w-3 h-3" />,
+  Pending: {
+    icon: <AlertCircle className="w-3 h-3" />,
     cls: "bg-rose-50 text-rose-700 border border-rose-200",
   },
+};
+
+const DEFAULT_STATUS_STYLE = {
+  icon: <Clock className="w-3 h-3" />,
+  cls: "bg-slate-50 text-slate-500 border border-slate-200",
 };
 
 /* ══════════════════════════════════════════════
@@ -73,6 +81,11 @@ function SummaryCard({ label, value, colorClass }) {
    — table rows (`entries`), summary cards (`totals`), and
    pagination all come from this one response. No other bill
    settlement endpoint is called.
+
+   IMPORTANT: the backend controller declares this endpoint's
+   date params as `startDate` / `endDate` (not fromDate/toDate),
+   and has no `status` param at all — so status filtering is
+   currently client-facing only and is NOT sent to the API.
 ══════════════════════════════════════════════ */
 export default function BillSettlementReport() {
   const { error, info } = useToast();
@@ -94,9 +107,8 @@ export default function BillSettlementReport() {
       setLoading(true);
 
       const params = new URLSearchParams({
-        fromDate: appliedFilters.fromDate,
-        toDate: appliedFilters.toDate,
-        status: appliedFilters.status,
+        startDate: appliedFilters.fromDate,
+        endDate: appliedFilters.toDate,
         page: currentPage - 1, // backend pages are 0-indexed
         size: ITEMS_PER_PAGE,
       });
@@ -178,8 +190,8 @@ export default function BillSettlementReport() {
         { key: "customerName", header: "Customer Name" },
         { key: "city", header: "City" },
         { key: "mobileNo", header: "Mobile No" },
-        { key: "billNo", header: "Bill No" },
-        { key: "billDate", header: "Bill Date" },
+        { key: "invoiceNo", header: "Invoice No" },
+        { key: "invoiceDate", header: "Invoice Date" },
         { key: "billAmount", header: "Bill Amt" },
         { key: "discountAmount", header: "Disc. Amt" },
         { key: "finalAmount", header: "Final Amt" },
@@ -306,9 +318,9 @@ export default function BillSettlementReport() {
               className={inputCls}
             >
               <option value="All">All Statuses</option>
-              <option>Settled</option>
-              <option>Pending</option>
-              <option>Cancelled</option>
+              <option value="Paid">Paid</option>
+              <option value="Partially Paid">Partially Paid</option>
+              <option value="Pending">Pending</option>
             </select>
           </div>
         </div>
@@ -346,8 +358,8 @@ export default function BillSettlementReport() {
                   ["Customer Name", "text-left"],
                   ["City", "text-left"],
                   ["Mobile No", "text-left"],
-                  ["Bill No", "text-left"],
-                  ["Bill Date", "text-left"],
+                  ["Invoice No", "text-left"],
+                  ["Invoice Date", "text-left"],
                   ["Bill Amt", "text-right"],
                   ["Disc. Amt", "text-right"],
                   ["Final Amt", "text-right"],
@@ -381,7 +393,7 @@ export default function BillSettlementReport() {
               ) : settlementData.length > 0 ? (
                 settlementData.map((row) => {
                   const status = row.billStatus || "Pending";
-                  const sc = STATUS_CONFIG[status] || STATUS_CONFIG.Pending;
+                  const sc = STATUS_CONFIG[status] || DEFAULT_STATUS_STYLE;
                   return (
                     <tr
                       key={row.settlementId || row.id}
@@ -414,14 +426,14 @@ export default function BillSettlementReport() {
                         {row.mobileNo}
                       </td>
 
-                      {/* Bill No */}
+                      {/* Invoice No */}
                       <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.billNo}
+                        {row.invoiceNo}
                       </td>
 
-                      {/* Bill Date */}
+                      {/* Invoice Date */}
                       <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.billDate}
+                        {row.invoiceDate}
                       </td>
 
                       {/* Bill Amt */}
