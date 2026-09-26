@@ -421,7 +421,10 @@ const DashboardLayout = () => {
 
         <div className="lg:hidden mt-auto border-t border-slate-100 p-3">
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => {
+              sessionStorage.removeItem("gst-authenticated");
+              navigate("/login");
+            }}
             className={`flex items-center gap-4 w-full px-3 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition-all ${!open ? 'justify-center' : ''}`}
           >
             <FiLogOut size={20} className="shrink-0" />
@@ -492,7 +495,10 @@ const DashboardLayout = () => {
                       </div>
                     </div>
                     <div className="p-2">
-                      <button onClick={() => navigate("/login")} className="w-full mt-2 flex items-center gap-4 px-4 py-3 text-sm font-black text-rose-500 hover:bg-rose-50 rounded-xl transition-all border-t border-slate-100 uppercase tracking-widest"><FiLogOut /> Log Out</button>
+                      <button onClick={() => {
+                        sessionStorage.removeItem("gst-authenticated");
+                        navigate("/login");
+                      }} className="w-full mt-2 flex items-center gap-4 px-4 py-3 text-sm font-black text-rose-500 hover:bg-rose-50 rounded-xl transition-all border-t border-slate-100 uppercase tracking-widest"><FiLogOut /> Log Out</button>
                     </div>
                   </div>
                 )}

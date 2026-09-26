@@ -144,6 +144,14 @@ import InvoicePrint from
 
 
 
+const AuthenticatedLayout = () => {
+  if (sessionStorage.getItem("gst-authenticated") !== "true") {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <DashboardLayout />;
+};
+
 export default function App() {
   return (
     // Sabse outer: ToastProvider (taaki har jagah toast available ho)
@@ -158,7 +166,7 @@ export default function App() {
               <Route path="/login" element={<Login />} />
 
               {/* Protected Layout */}
-              <Route path="/" element={<DashboardLayout />}>
+              <Route path="/" element={<AuthenticatedLayout />}>
                 {/* DEFAULT PAGE = HOME */}
                 <Route index element={<Home />} />
 

@@ -1,10 +1,63 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { HiOutlineEye, HiOutlineEyeOff } from "react-icons/hi";
-// import LoginIllustration from "../assets/LoginBackground.png";
-import logoimage from "../assets/logoimage.png";
+import LoginIllustration from "../assets/LoginBackground.webp";
+import logoimage from "../assets/logoImage.png";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const submissionInProgress = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (submissionInProgress.current) return;
+
+    const isLoopbackHost = ["localhost", "127.0.0.1", "[::1]"].includes(
+      window.location.hostname
+    );
+    if (!isLoopbackHost && window.location.protocol !== "https:") {
+      setPassword("");
+      setErrorMessage("A secure connection is required to sign in.");
+      return;
+    }
+
+    submissionInProgress.current = true;
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password,
+          tenantId,
+        }),
+      });
+
+      if (response.status === 200) {
+        sessionStorage.setItem("gst-authenticated", "true");
+        navigate("/");
+      } else if (response.status === 403) {
+        setErrorMessage("Invalid username, password, or tenant");
+      } else {
+        setErrorMessage("Unable to sign in. Please try again.");
+      }
+    } catch {
+      setErrorMessage("Unable to sign in. Please try again.");
+    } finally {
+      setPassword("");
+      submissionInProgress.current = false;
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row relative overflow-x-hidden bg-[#f0f9ff] font-poppins">
@@ -87,7 +140,7 @@ const LoginPage = () => {
             </div>
 
             {/* FORM */}
-            <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-5" onSubmit={handleSubmit}>
               <div>
                 <label className="hidden lg:block text-[10px] font-black text-slate-400 uppercase ml-1 mb-1.5 tracking-widest">
                   Username
@@ -95,6 +148,9 @@ const LoginPage = () => {
                 <input
                   type="text"
                   placeholder="Username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  required
                   className="w-full px-5 py-4 lg:py-3.5 bg-white lg:bg-slate-50/50 border-2 border-[#89cddb] lg:border-slate-200 rounded-xl lg:rounded-2xl text-sm outline-none focus:border-cyan-600 transition-all shadow-sm"
                 />
               </div>
@@ -107,6 +163,9 @@ const LoginPage = () => {
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="Password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
                     className="w-full px-5 py-4 lg:py-3.5 bg-white lg:bg-slate-50/50 border-2 border-[#89cddb] lg:border-slate-200 rounded-xl lg:rounded-2xl text-sm outline-none focus:border-cyan-600 transition-all shadow-sm"
                   />
                   <button
@@ -119,14 +178,38 @@ const LoginPage = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="hidden lg:block text-[10px] font-black text-slate-400 uppercase ml-1 mb-1.5 tracking-widest">
+                  Tenant ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="Tenant ID"
+                  value={tenantId}
+                  onChange={(event) => setTenantId(event.target.value)}
+                  required
+                  className="w-full px-5 py-4 lg:py-3.5 bg-white lg:bg-slate-50/50 border-2 border-[#89cddb] lg:border-slate-200 rounded-xl lg:rounded-2xl text-sm outline-none focus:border-cyan-600 transition-all shadow-sm"
+                />
+              </div>
+
+              {errorMessage && (
+                <p role="alert" className="text-sm font-semibold text-red-600">
+                  {errorMessage}
+                </p>
+              )}
+
               <div className="flex justify-end pr-1">
                 <button className="text-[11px] text-cyan-700 font-bold uppercase hover:text-slate-900 transition-colors">
                   Forgot Password?
                 </button>
               </div>
 
-              <button className="w-full py-4 bg-[#0e8ca3] lg:bg-slate-900 text-white rounded-xl lg:rounded-2xl font-bold lg:font-black text-sm lg:text-[11px] lg:tracking-[0.25em] uppercase transition-all active:scale-[0.97] shadow-lg shadow-cyan-900/20">
-                Login
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-4 bg-[#0e8ca3] lg:bg-slate-900 text-white rounded-xl lg:rounded-2xl font-bold lg:font-black text-sm lg:text-[11px] lg:tracking-[0.25em] uppercase transition-all active:scale-[0.97] shadow-lg shadow-cyan-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Signing in..." : "Login"}
               </button>
             </form>
           </div>
