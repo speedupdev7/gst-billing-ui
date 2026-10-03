@@ -1,939 +1,1095 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useLocation } from "react-router-dom";
 import {
-    Save, Printer, Mail, Send, Truck, XCircle, X, Plus,
-    MapPin, FileText, Search, Clock, Calendar, Hash,
-    RefreshCcw, User, CreditCard, Landmark, CheckCircle,
-    RotateCcw, AlertTriangle
+  Save, Printer, Mail, Send, Truck, XCircle, X, Search, Clock, Calendar, Hash,
+  RefreshCcw, User, CreditCard, Landmark, CheckCircle, RotateCcw, AlertCircle,
+  List, Loader2, Phone, MapPin, FileText, ArrowRight, Package, Users,
+  ClipboardList, Receipt, History, Eraser, ChevronDown
 } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import { usePayment } from "../contextapi/PaymentContext";
 import { useToast } from "../contextapi/ToastContext";
 import MultiTransaction from "../contextapi/MultiTransaction";
-import { useLocation } from "react-router-dom";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from 'axios';
 
-// ─────────────────────────────────────────────
-//  COLOR PALETTE  (rose-dominant — mirrors
-//  BillingV4's blue/amber but in rose/amber)
-//
-//  Top bar:   from-rose-900 via-rose-800 to-rose-900
-//  Sections:  rose-100/200 tints  (amber-100 in billing)
-//  Table:     slate-900 + rose accents
-//  CTA block: rose-800 → rose-700 → rose-900
-//  Action bar: #1c0a0a deep-rose near-black
-// ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   Palette (unchanged, rose-dominant)
+   Top bar    #881337 → #be123c → #9f1239
+   Sections   rose-50/100/200 tints
+   Table      #1a0808 → #111111 header with rose / blue / emerald accents
+   CTA        rose gradient (return) · emerald gradient (invoice)
+   Action bar #1c0a0a → #3b0d0d
+   ════════════════════════════════════════════════════════════ */
 
-const BillingReturnV4 = () => {
-    const location = useLocation();
-    const invoiceFromList = location.state?.invoice;
-    const toast = useToast();
-    const navigate = useNavigate();
-    // ── State ───────────────────────────────────────────────
-    const [invoiceDate, setInvoiceDate] = useState(new Date());
-    const [invoiceTime, setInvoiceTime] = useState(new Date());
-    const [customerSearch, setCustomerSearch] = useState('');
-    const [customerSuggestions, setCustomerSuggestions] = useState([]);
-    const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-    const [invoiceNo, setInvoiceNo] = useState('');
-    const [placeOfSupply, setPlaceOfSupply] = useState('Maharashtra');
-    const [reverseCharge, setReverseCharge] = useState(false);
-    const [narration, setNarration] = useState('');
-    const [returnAll, setReturnAll] = useState(false);
-    const [clearAll, setClearAll] = useState(false);
-    const screenKey = "return";
+/* ════════════════════════════════════════════════════════════
+   Pure helpers
+   ════════════════════════════════════════════════════════════ */
+const fmtINR = (n) =>
+  Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const { showPaymentModal, setShowPaymentModal } = usePayment();
+const splitAmount = (n) => {
+  const [i, d] = Number(n || 0).toFixed(2).split('.');
+  return { int: Number(i).toLocaleString('en-IN'), dec: d };
+};
 
-    const [editingId, setEditingId] = useState(null);
-    const [returnHistory, setReturnHistory] = useState([]);
-    const [isLoadingReturns, setIsLoadingReturns] = useState(false);
-    const [returnReasonCode, setReturnReasonCode] = useState('DEFECT');
-    const [returnReasonText, setReturnReasonText] = useState('');
-    const [returnRemarks, setReturnRemarks] = useState('');
-    const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
-    const [originalInvoiceData, setOriginalInvoiceData] = useState(null);
-    const [loadedInvoiceNo, setLoadedInvoiceNo] = useState(null);
-    const [printError, setPrintError] = useState(null);
+const sameLine = (a, row) =>
+  a.invoiceItemId != null && row.invoiceItemId != null
+    ? a.invoiceItemId === row.invoiceItemId
+    : a.itemId === row.itemId;
 
-    const toggleEdit = (id) => setEditingId(prev => prev === id ? null : id);
+// Everything on screen is derived from the raw rows → nothing goes stale.
+const computeRows = (rows) => {
+  const T = { gross: 0, disc: 0, taxable: 0, gst: 0, cgst: 0, sgst: 0, igst: 0 };
+  const R = { gross: 0, disc: 0, taxable: 0, gst: 0, cgst: 0, sgst: 0, igst: 0 };
 
-    // ── Row factory ─────────────────────────────────────────
-    const createEmptyRow = () => ({
-        id: Date.now() + Math.random(), itemId: null, itemCode: '',
-        itemName: '', itemNameDetails: '', hsn: '', batch: '',
-        rate: 0, qty: 0, returnQty: 0,
-        grossAmount: 0, discP: 0, discA: 0, taxableAmt: 0,
-        gstP: 18, gstA: 0, lineTotal: 0
-    });
-
-    const [items, setItems] = useState([createEmptyRow()]);
-    const [totals, setTotals] = useState({
-        totalGross: 0, totalDisc: 0, totalTaxable: 0,
-        totalGST: 0, invoiceTotal: 0, roundOff: 0
-    });
-
-    // ── Calculations ────────────────────────────────────────
-    const calculateTotals = useCallback((currentItems) => {
-        let tG = 0, tD = 0, tGST = 0;
-        const updated = currentItems.map(item => {
-            const gross = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
-            const disc = (gross * (parseFloat(item.discP) || 0)) / 100;
-            const taxable = gross - disc;
-            const tax = (taxable * (parseFloat(item.gstP) || 0)) / 100;
-            tG += gross; tD += disc; tGST += tax;
-            return { ...item, grossAmount: gross, discA: disc, taxableAmt: taxable, gstA: tax, lineTotal: taxable + tax };
-        });
-        const raw = tG - tD + tGST, rounded = Math.round(raw);
-        setTotals({ totalGross: tG, totalDisc: tD, totalTaxable: tG - tD, totalGST: tGST, invoiceTotal: rounded, roundOff: (rounded - raw).toFixed(2) });
-        return updated;
-    }, []);
-
-    const handleItemChange = (index, field, value) => {
-        const u = [...items]; u[index][field] = value; setItems(u);
+  const items = rows.map(item => {
+    const rate = Number(item.rate) || 0;
+    const qty = Number(item.qty) || 0;
+    const rq = Number(item.returnQty) || 0;
+    const dp = Number(item.discP) || 0;
+    const gp = Number(item.gstP) || 0;
+    const calc = (q) => {
+      const gross = q * rate;
+      const disc = (gross * dp) / 100;
+      const taxable = gross - disc;
+      const tax = (taxable * gp) / 100;
+      return { gross, disc, taxable, tax, total: taxable + tax };
     };
+    const inv = calc(qty);
+    const ret = calc(rq);
+    const active = rq > 0 ? ret : inv;
+    const split = (t) => (item.isIgst ? { cgst: 0, sgst: 0, igst: t } : { cgst: t / 2, sgst: t / 2, igst: 0 });
 
-    const addNewRow = () => setItems([...items, createEmptyRow()]);
-    const removeRow = (id) => { if (items.length > 1) setItems(calculateTotals(items.filter(i => i.id !== id))); };
+    T.gross += inv.gross; T.disc += inv.disc; T.taxable += inv.taxable; T.gst += inv.tax;
+    const is = split(inv.tax); T.cgst += is.cgst; T.sgst += is.sgst; T.igst += is.igst;
+    R.gross += ret.gross; R.disc += ret.disc; R.taxable += ret.taxable; R.gst += ret.tax;
+    const rs = split(ret.tax); R.cgst += rs.cgst; R.sgst += rs.sgst; R.igst += rs.igst;
 
-    // ── Return totals ────────────────────────────────────────
-    const returnTotals = items.reduce((acc, item) => {
-        const qty = Number(item.returnQty) || 0;
-        const gross = item.rate * qty;
-        const disc = gross * ((Number(item.discP) || 0) / 100);
-        const taxable = gross - disc;
-        const gst = taxable * ((Number(item.gstP) || 0) / 100);
-        return { gross: acc.gross + gross, disc: acc.disc + disc, taxable: acc.taxable + taxable, gst: acc.gst + gst };
-    }, { gross: 0, disc: 0, taxable: 0, gst: 0 });
-
-    const isReturnActive = returnTotals.gross > 0;
-    const adjustmentList = items.filter(i => i.returnQty > 0);
-    const isAdjustmentActive = adjustmentList.length > 0;
-
-    // ── API ─────────────────────────────────────────────────
-    const searchCustomers = async (q) => {
-        if (q.length < 3) { setCustomerSuggestions([]); return; }
-        try {
-            const res = await axios.get(`/api/customer-master/search?q=${encodeURIComponent(q)}`);
-            setCustomerSuggestions(res.data); setShowCustomerDropdown(true);
-        } catch { setCustomerSuggestions([]); }
+    return {
+      ...item,
+      grossAmount: inv.gross, discA: inv.disc, taxableAmt: inv.taxable, gstA: inv.tax, lineTotal: inv.total,
+      ret, active, split: split(active.tax)
     };
+  });
 
-    const selectCustomer = (c) => { setSelectedCustomer(c); setCustomerSearch(c.customerName); setShowCustomerDropdown(false); };
+  const raw = T.taxable + T.gst, rounded = Math.round(raw);
+  return {
+    items,
+    totals: {
+      totalGross: T.gross, totalDisc: T.disc, totalTaxable: T.taxable, totalGST: T.gst,
+      totalCgst: T.cgst, totalSgst: T.sgst, totalIgst: T.igst,
+      invoiceTotal: rounded, roundOff: (rounded - raw).toFixed(2)
+    },
+    returnTotals: { ...R, total: R.taxable + R.gst }
+  };
+};
 
-    const getInvoiceByNumber = async (invNo) => {
-        try {
-            if (!invNo || invNo.length < 3) return;
-            const res = await axios.get('/api/invoice/search-by-number', { params: { invoiceNo: invNo } });
-            const data = res.data?.data || res.data;
-            if (!data) return;
-            const customer = data.customer || data.unit || data.customerMaster || null;
-            setSelectedCustomer(customer);
-            setCustomerSearch(customer?.customerName || customer?.name || data.customerName || '');
-            setShowCustomerDropdown(false);
-            const apiInvoiceNo = data.invoiceNo || invNo;
-            setInvoiceNo(apiInvoiceNo); setLoadedInvoiceNo(apiInvoiceNo);
-            if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
-            if (data.placeOfSupply) setPlaceOfSupply(data.placeOfSupply);
-            setReverseCharge(Boolean(data.reverseCharge));
-            setNarration(data.narration || '');
-            const invoiceItems = data.invoiceItems || data.items || [];
-            const mapped = invoiceItems.map(item => ({
-                id: Date.now() + Math.random(),
-                invoiceItemId: item.invoiceItemId || item.id,
-                itemId: item.itemId,
-                itemName: item.itemName || item.item?.itemName || '',
-                batch: item.batchCode || item.batch || '',
-                hsn: item.hsnCode || item.hsn || '0000',
-                rate: item.rate ?? 0, qty: item.quantity ?? item.qty ?? 0, returnQty: 0,
-                grossAmount: item.grossAmount ?? 0,
-                discP: item.discountPct ?? item.discP ?? 0, discA: item.discountAmt ?? 0,
-                taxableAmt: item.taxableAmount ?? 0,
-                gstP: item.gstRate ?? 0, gstA: (item.cgstAmt ?? 0) + (item.sgstAmt ?? 0),
-                lineTotal: item.lineTotal ?? 0,
-            }));
-            setItems(calculateTotals(mapped));
-            setOriginalInvoiceData(data);
-            fetchReturnHistory(apiInvoiceNo);
-        } catch (err) { console.error(err); }
-    };
+/* ════════════════════════════════════════════════════════════
+   Design tokens
+   ════════════════════════════════════════════════════════════ */
+const inputCls =
+  "w-full h-10 rounded-xl border border-rose-200 bg-white px-3 text-[13px] font-medium text-slate-700 " +
+  "placeholder:text-slate-300 placeholder:font-normal shadow-sm outline-none transition-all duration-150 " +
+  "hover:border-rose-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100";
+const roInput = "!bg-slate-50 !text-slate-600 cursor-default";
 
-    const fetchReturnHistory = async (invNo) => {
-        try {
-            setIsLoadingReturns(true);
-            const res = await axios.get(`/api/invoice/${encodeURIComponent(invNo)}/returns`);
-            const returns = res.data?.data || res.data || [];
-            setReturnHistory(Array.isArray(returns) ? returns : []);
-        } catch { setReturnHistory([]); }
-        finally { setIsLoadingReturns(false); }
-    };
+const btnBase =
+  "group relative inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-[13px] font-semibold whitespace-nowrap select-none " +
+  "transition-all duration-200 ease-out active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
+  "disabled:opacity-50 disabled:pointer-events-none";
+const btn = {
+  // header (on rose)
+  headerWhite: `${btnBase} bg-white text-rose-800 shadow-lg shadow-rose-950/30 hover:bg-rose-50 hover:-translate-y-px focus-visible:ring-white focus-visible:ring-offset-[#9f1239]`,
+  headerGhost: `${btnBase} !h-9 bg-white/10 text-white border border-white/20 backdrop-blur hover:bg-white/20 hover:border-white/30 hover:-translate-y-px focus-visible:ring-white/70 focus-visible:ring-offset-[#9f1239]`,
+  // dark action bar
+  primary: `${btnBase} bg-gradient-to-b from-rose-600 to-rose-700 text-white border border-rose-400/30 shadow-lg shadow-rose-600/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] hover:from-rose-500 hover:to-rose-600 hover:-translate-y-px focus-visible:ring-rose-400 focus-visible:ring-offset-[#1c0a0a] disabled:!bg-none disabled:!bg-[#4b1c1c] disabled:!shadow-none disabled:!border-rose-950`,
+  secondary: `${btnBase} bg-rose-900/40 text-rose-50 border border-rose-700/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-rose-800 hover:border-rose-600 hover:-translate-y-px focus-visible:ring-rose-300 focus-visible:ring-offset-[#1c0a0a]`,
+  indigo: `${btnBase} bg-indigo-500/10 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-600 hover:text-white hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-600/30 hover:-translate-y-px focus-visible:ring-indigo-400 focus-visible:ring-offset-[#1c0a0a]`,
+  orange: `${btnBase} bg-orange-500/10 text-orange-300 border border-orange-400/30 hover:bg-orange-600 hover:text-white hover:border-orange-400 hover:shadow-lg hover:shadow-orange-600/30 hover:-translate-y-px focus-visible:ring-orange-400 focus-visible:ring-offset-[#1c0a0a]`,
+  ghostDanger: `${btnBase} text-rose-300/60 hover:text-red-300 hover:bg-red-500/10 focus-visible:ring-red-400 focus-visible:ring-offset-[#1c0a0a]`,
+};
 
-    const getAvailableQuantity = (itemId) => {
-        if (!originalInvoiceData?.items) return 0;
-        const orig = originalInvoiceData.items.find(i => i.itemId === itemId);
-        if (!orig) return 0;
-        const totalReturned = (returnHistory || []).reduce((sum, ret) => {
-            const ri = ret.items?.find(i => i.itemId === itemId);
-            return sum + (ri?.quantity || 0);
-        }, 0);
-        return (orig.quantity || 0) - totalReturned;
-    };
+const tones = {
+  rose: {
+    wrap: 'border-rose-200/60',
+    strip: 'bg-gradient-to-r from-rose-100/70 to-rose-50/30 border-rose-200/60',
+    chip: 'from-rose-400 to-rose-500 shadow-rose-500/30',
+    title: 'text-rose-900',
+    sub: 'text-rose-700/70',
+  },
+  slate: {
+    wrap: 'border-slate-200',
+    strip: 'bg-gradient-to-r from-slate-100 to-slate-50 border-slate-200',
+    chip: 'from-slate-700 to-slate-900 shadow-slate-900/25',
+    title: 'text-slate-800',
+    sub: 'text-slate-500',
+  },
+  blue: {
+    wrap: 'border-slate-200',
+    strip: 'bg-gradient-to-r from-blue-50 to-white border-blue-100',
+    chip: 'from-blue-500 to-blue-600 shadow-blue-500/30',
+    title: 'text-slate-800',
+    sub: 'text-slate-500',
+  },
+};
 
-    useEffect(() => {
-        if (invoiceFromList?.invoiceNo) getInvoiceByNumber(invoiceFromList.invoiceNo);
-    }, [invoiceFromList]);
+/* ════════════════════════════════════════════════════════════
+   Presentational components
+   (kept OUTSIDE the main component — defining them inside remounts
+    every input on each keystroke and kills focus)
+   ════════════════════════════════════════════════════════════ */
+const Field = ({ label, htmlFor, children, className = '' }) => (
+  <div className={`flex flex-col gap-1.5 ${className}`}>
+    <label htmlFor={htmlFor} className="text-[12px] font-semibold text-slate-500">{label}</label>
+    {children}
+  </div>
+);
 
-    const submitReturn = async () => {
-        const invNo = loadedInvoiceNo || invoiceNo;
-        if (!invNo) { toast.error('Load an invoice first.'); return; }
-        const lines = items.filter(i => i.returnQty > 0).map(item => ({
-            invoiceItemId: item.invoiceItemId || item.itemId, itemId: item.itemId,
-            batchCode: item.batch || 'BATCH01', hsnCode: item.hsn || '0000',
-            quantity: item.returnQty, rate: item.rate,
-            grossAmount: item.rate * item.returnQty,
-            discountPct: item.discP,
-            discountAmt: (item.rate * item.returnQty * item.discP) / 100,
-            taxableAmount: (item.rate * item.returnQty) * (1 - item.discP / 100),
-            gstRate: item.gstP,
-            cgstAmt: ((item.rate * item.returnQty * (1 - item.discP / 100)) * item.gstP / 100) / 2,
-            sgstAmt: ((item.rate * item.returnQty * (1 - item.discP / 100)) * item.gstP / 100) / 2,
-            igstAmt: 0,
-            lineTotal: (item.rate * item.returnQty * (1 - item.discP / 100)) * (1 + item.gstP / 100),
-        }));
-        if (lines.length === 0) { toast.error('Please select items to return'); return; }
-        const payload = {
-            invoiceNo: invNo,
-            returnNo: `RTN-${new Date().getFullYear()}-${Date.now()}`,
-            returnDate: new Date().toISOString().split('T')[0],
-            returnType: 'RETURN', reasonCode: returnReasonCode,
-            reasonText: returnReasonText, remarks: returnRemarks, items: lines,
-        };
-        try {
-            setIsSubmittingReturn(true);
-            const res = await axios.post('/api/invoice/returns', payload);
-            if (res.status === 200 || res.status === 201) {
-                toast.success('Return submitted successfully!');
-                setReturnReasonCode('DEFECT'); setReturnReasonText(''); setReturnRemarks('');
-                setItems(calculateTotals(items.map(i => ({ ...i, returnQty: 0 }))));
-                setReturnAll(false);
-                fetchReturnHistory(invNo);
-            }
-        } catch (err) {
-            toast.error(`Error: ${err.response?.data?.message || err.message}`);
-        } finally { setIsSubmittingReturn(false); }
-    };
+const IconInput = React.forwardRef(({ icon: Icon, iconClass = 'text-slate-400', className = '', right, ...props }, ref) => (
+  <div className="relative">
+    {Icon && <Icon size={15} className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${iconClass}`} />}
+    <input ref={ref} className={`${inputCls} ${Icon ? 'pl-9' : ''} ${right ? 'pr-9' : ''} ${className}`} {...props} />
+    {right && <span className="absolute right-3 top-1/2 -translate-y-1/2">{right}</span>}
+  </div>
+));
 
-    // ── shared input class ──────────────────────────────────
-    const inputCls = "w-full border border-rose-200 rounded-lg px-3 py-2 bg-white font-medium text-slate-700 text-[12px] outline-none shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all placeholder:text-slate-300 placeholder:font-normal";
-
-    const Field = ({ label, children, className = '' }) => (
-        <div className={`flex flex-col gap-1.5 ${className}`}>
-            <label className="text-[9.5px] font-black text-slate-400 uppercase tracking-[0.12em]">{label}</label>
-            {children}
+const Section = ({ icon: Icon, title, subtitle, tone = 'rose', bodyClass = '', action, children }) => {
+  const t = tones[tone];
+  return (
+    <section className={`border-t ${t.wrap}`}>
+      <div className={`flex items-center gap-3 border-b px-6 py-3 ${t.strip}`}>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md ${t.chip}`}>
+          <Icon size={15} />
+        </span>
+        <div className="min-w-0">
+          <h3 className={`text-[14px] font-bold leading-tight ${t.title}`}>{title}</h3>
+          {subtitle && <p className={`text-[11.5px] ${t.sub}`}>{subtitle}</p>}
         </div>
-    );
+        {action && <div className="ml-auto">{action}</div>}
+      </div>
+      <div className={`px-6 py-5 ${bodyClass}`}>{children}</div>
+    </section>
+  );
+};
 
-    // ────────────────────────────────────────────────────────
-    return (
-        <div className="min-h-screen bg-rose-50/20 text-[12px] font-poppins text-slate-700">
-            <div className="max-w-[1500px] mx-auto bg-white rounded-2xl overflow-hidden border border-rose-200/60 shadow-2xl shadow-rose-900/5">
+const StatRow = ({ label, value, tone = 'text-slate-900' }) => (
+  <div className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+    <dt className="font-medium text-slate-500">{label}</dt>
+    <dd className={`font-bold tabular-nums ${tone}`}>{value}</dd>
+  </div>
+);
 
-                {/* ── ERROR BANNER ─────────────────────────────────── */}
-                {printError && (
-                    <div className="bg-red-50 border-b-2 border-red-200 px-5 py-3.5 flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                            <XCircle size={15} className="text-red-600" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-xs font-bold text-red-800">Error</p>
-                            <p className="text-[11px] text-red-600 mt-0.5">{printError}</p>
-                        </div>
-                        <button onClick={() => setPrintError(null)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-100 transition-colors">
-                            <X size={14} />
-                        </button>
-                    </div>
+const StatCard = ({ title, bar, text, boxCls, children }) => (
+  <div className={`rounded-2xl border p-5 transition-colors duration-300 ${boxCls}`}>
+    <div className="mb-1 flex items-center gap-2 border-b border-inherit pb-3">
+      <span className={`h-4 w-1.5 rounded-full ${bar}`} />
+      <h4 className={`text-[13px] font-bold ${text}`}>{title}</h4>
+    </div>
+    <dl className="divide-y divide-dashed divide-slate-200">{children}</dl>
+  </div>
+);
+
+/* ════════════════════════════════════════════════════════════
+   Main component
+   ════════════════════════════════════════════════════════════ */
+const BillingReturnV4 = () => {
+  const location = useLocation();
+  const invoiceFromList = location.state?.invoice;
+  const toast = useToast();
+  const navigate = useNavigate();
+  const screenKey = "return";
+
+  const { showPaymentModal, setShowPaymentModal } = usePayment();
+
+  // invoice header
+  const [invoiceDate, setInvoiceDate] = useState(new Date());
+  const [invoiceTime, setInvoiceTime] = useState(new Date());
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [loadedInvoiceNo, setLoadedInvoiceNo] = useState(null);
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [narration, setNarration] = useState('');
+
+  // customer
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerHighlight, setCustomerHighlight] = useState(0);
+
+  // rows
+  const [rawItems, setRawItems] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [returnAll, setReturnAll] = useState(false);
+
+  // return meta
+  const [returnHistory, setReturnHistory] = useState([]);
+  const [isLoadingReturns, setIsLoadingReturns] = useState(false);
+  const [returnReasonCode, setReturnReasonCode] = useState('DEFECT');
+  const [returnReasonText, setReturnReasonText] = useState('');
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+  const [printError, setPrintError] = useState(null);
+
+  // refs
+  const returnQtyRefs = useRef({});
+  const customerDropdownRef = useRef(null);
+  const customerTimer = useRef(null);
+  const invoiceTimer = useRef(null);
+  const invoiceReqId = useRef(0);   // ignore out-of-order invoice responses
+
+  // ── derived ──────────────────────────────────────────────
+  const { items, totals, returnTotals } = useMemo(() => computeRows(rawItems), [rawItems]);
+  const adjustmentList = items.filter(i => Number(i.returnQty) > 0);
+  const isReturnActive = adjustmentList.length > 0;
+  const payable = isReturnActive ? returnTotals.total : totals.invoiceTotal;
+  const payableParts = splitAmount(payable);
+
+  // how much of a line can still be returned (original qty − already returned)
+  const getAvail = (row) => {
+    const returned = (returnHistory || []).reduce((sum, ret) => (
+      sum + (ret.items || []).filter(i => sameLine(i, row)).reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+    ), 0);
+    return Math.max(0, (Number(row.qty) || 0) - returned);
+  };
+
+  // ── invoice loading ──────────────────────────────────────
+  const fetchReturnHistory = async (invNo) => {
+    try {
+      setIsLoadingReturns(true);
+      const res = await axios.get(`/api/invoice/${encodeURIComponent(invNo)}/returns`);
+      const returns = res.data?.data || res.data || [];
+      setReturnHistory(Array.isArray(returns) ? returns : []);
+    } catch { setReturnHistory([]); }
+    finally { setIsLoadingReturns(false); }
+  };
+
+  const getInvoiceByNumber = async (invNo) => {
+    const q = (invNo || '').trim();
+    if (q.length < 3) return;
+    const req = ++invoiceReqId.current;
+    setIsLoadingInvoice(true);
+    setLoadError('');
+    try {
+      const res = await axios.get('/api/invoice/search-by-number', { params: { invoiceNo: q } });
+      if (req !== invoiceReqId.current) return;
+      const data = res.data?.data || res.data;
+      if (!data) { setLoadError('No invoice found with this number'); return; }
+
+      const customer = data.customer || data.unit || data.customerMaster || null;
+      setSelectedCustomer(customer);
+      setCustomerSearch(customer?.customerName || customer?.name || data.customerName || '');
+      setShowCustomerDropdown(false);
+      const apiInvoiceNo = data.invoiceNo || q;
+      setInvoiceNo(apiInvoiceNo); setLoadedInvoiceNo(apiInvoiceNo);
+      if (data.invoiceDate) setInvoiceDate(new Date(data.invoiceDate));
+      setNarration(data.narration || '');
+
+      const invoiceItems = data.invoiceItems || data.items || [];
+      setRawItems(invoiceItems.map(item => ({
+        id: Date.now() + Math.random(),
+        invoiceItemId: item.invoiceItemId || item.id,
+        itemId: item.itemId,
+        itemName: item.itemName || item.item?.itemName || '',
+        batch: item.batchCode || item.batch || '',
+        hsn: item.hsnCode || item.hsn || '0000',
+        rate: item.rate ?? 0, qty: item.quantity ?? item.qty ?? 0, returnQty: 0,
+        discP: item.discountPct ?? item.discP ?? 0,
+        gstP: item.gstRate ?? 0,
+        isIgst: (item.igstAmt ?? 0) > 0,
+      })));
+      setEditingId(null);
+      setReturnAll(false);
+      fetchReturnHistory(apiInvoiceNo);
+    } catch (err) {
+      if (req !== invoiceReqId.current) return;
+      setLoadError(err.response?.status === 404 ? 'No invoice found with this number' : 'Could not load the invoice. Try again.');
+    } finally {
+      if (req === invoiceReqId.current) setIsLoadingInvoice(false);
+    }
+  };
+
+  // kept for parity with the API response (not rendered directly)
+  const [, setOriginalInvoiceData] = useState(null);
+
+  const handleInvoiceSearchChange = (v) => {
+    setInvoiceSearch(v);
+    setLoadError('');
+    if (invoiceTimer.current) clearTimeout(invoiceTimer.current);
+    if (v.trim().length < 3) return;
+    invoiceTimer.current = setTimeout(() => getInvoiceByNumber(v), 450);
+  };
+
+  const handleInvoiceSearchKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (invoiceTimer.current) clearTimeout(invoiceTimer.current);
+    getInvoiceByNumber(invoiceSearch);
+  };
+
+  useEffect(() => {
+    if (invoiceFromList?.invoiceNo) {
+      setInvoiceSearch(invoiceFromList.invoiceNo);
+      getInvoiceByNumber(invoiceFromList.invoiceNo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceFromList]);
+
+  useEffect(() => () => {
+    if (customerTimer.current) clearTimeout(customerTimer.current);
+    if (invoiceTimer.current) clearTimeout(invoiceTimer.current);
+  }, []);
+
+  // ── customer search ──────────────────────────────────────
+  const searchCustomers = (q) => {
+    if (customerTimer.current) clearTimeout(customerTimer.current);
+    if (q.length < 3) {
+      setCustomerSuggestions(prev => (prev.length ? [] : prev));
+      setShowCustomerDropdown(false);
+      return;
+    }
+    customerTimer.current = setTimeout(async () => {
+      try {
+        const res = await axios.get(`/api/customer-master/search?q=${encodeURIComponent(q)}`);
+        const list = Array.isArray(res.data) ? res.data : [];
+        setCustomerSuggestions(list);
+        setCustomerHighlight(0);
+        setShowCustomerDropdown(list.length > 0);
+      } catch { setCustomerSuggestions([]); setShowCustomerDropdown(false); }
+    }, 250);
+  };
+
+  const selectCustomer = (c) => {
+    if (customerTimer.current) clearTimeout(customerTimer.current);
+    setSelectedCustomer(c);
+    setCustomerSearch(c.customerName);
+    setCustomerSuggestions([]);
+    setCustomerHighlight(0);
+    setShowCustomerDropdown(false);
+  };
+
+  const handleCustomerKeyDown = (e) => {
+    const n = customerSuggestions.length;
+    if (!n) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!showCustomerDropdown) { setShowCustomerDropdown(true); return; }
+      setCustomerHighlight(h => (h + 1) % n);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCustomerHighlight(h => (h - 1 + n) % n);
+    } else if (e.key === 'Enter' && showCustomerDropdown) {
+      e.preventDefault();
+      selectCustomer(customerSuggestions[customerHighlight] || customerSuggestions[0]);
+    } else if (e.key === 'Escape') {
+      setShowCustomerDropdown(false);
+    }
+  };
+
+  useEffect(() => {
+    customerDropdownRef.current?.children[customerHighlight]?.scrollIntoView({ block: 'nearest' });
+  }, [customerHighlight, showCustomerDropdown]);
+
+  // ── return-qty editing ───────────────────────────────────
+  const toggleEdit = (id) => setEditingId(prev => (prev === id ? null : id));
+
+  // focus the return-qty box as soon as a row is switched to edit mode
+  useEffect(() => {
+    if (editingId == null) return;
+    const idx = rawItems.findIndex(r => r.id === editingId);
+    const el = returnQtyRefs.current[idx];
+    if (el) { el.focus(); el.select(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId]);
+
+  const setReturnQty = (id, v) =>
+    setRawItems(prev => prev.map(r => (r.id === id ? { ...r, returnQty: v } : r)));
+
+  const handleReturnQtyKeyDown = (e, idx) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // confirm and jump to the next row that still has stock to return
+      const next = items.slice(idx + 1).find(r => getAvail(r) > 0);
+      setEditingId(next ? next.id : null);
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+    }
+  };
+
+  const handleReturnAll = (checked) => {
+    setReturnAll(checked);
+    setEditingId(null);
+    setRawItems(prev => prev.map(r => ({ ...r, returnQty: checked ? getAvail(r) : 0 })));
+  };
+
+  const handleClearAll = () => {
+    setReturnAll(false);
+    setEditingId(null);
+    setRawItems(prev => prev.map(r => ({ ...r, returnQty: 0 })));
+  };
+
+  const openPayment = () => {
+    localStorage.setItem('activePaymentScreen', screenKey);
+    setShowPaymentModal(true);
+  };
+
+  // ── submit ───────────────────────────────────────────────
+  const submitReturn = async () => {
+    const invNo = loadedInvoiceNo;
+    if (!invNo) { toast.error('Load an invoice first.'); return; }
+    const lines = adjustmentList.map(item => ({
+      invoiceItemId: item.invoiceItemId || item.itemId, itemId: item.itemId,
+      batchCode: item.batch || 'BATCH01', hsnCode: item.hsn || '0000',
+      quantity: Number(item.returnQty), rate: item.rate,
+      grossAmount: item.ret.gross,
+      discountPct: item.discP,
+      discountAmt: item.ret.disc,
+      taxableAmount: item.ret.taxable,
+      gstRate: item.gstP,
+      cgstAmt: item.isIgst ? 0 : item.ret.tax / 2,
+      sgstAmt: item.isIgst ? 0 : item.ret.tax / 2,
+      igstAmt: item.isIgst ? item.ret.tax : 0,
+      lineTotal: item.ret.total,
+    }));
+    if (lines.length === 0) { toast.error('Please select items to return'); return; }
+    const payload = {
+      invoiceNo: invNo,
+      returnNo: `RTN-${new Date().getFullYear()}-${Date.now()}`,
+      returnDate: new Date().toISOString().split('T')[0],
+      returnType: 'RETURN', reasonCode: returnReasonCode,
+      reasonText: returnReasonText, remarks: returnRemarks, items: lines,
+    };
+    try {
+      setIsSubmittingReturn(true);
+      const res = await axios.post('/api/invoice/returns', payload);
+      if (res.status === 200 || res.status === 201) {
+        toast.success('Return submitted successfully!');
+        setReturnReasonCode('DEFECT'); setReturnReasonText(''); setReturnRemarks('');
+        setRawItems(prev => prev.map(i => ({ ...i, returnQty: 0 })));
+        setReturnAll(false);
+        setEditingId(null);
+        fetchReturnHistory(invNo);
+      }
+    } catch (err) {
+      toast.error(`Error: ${err.response?.data?.message || err.message}`);
+    } finally { setIsSubmittingReturn(false); }
+  };
+
+  // ────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-rose-50/20 p-3 font-poppins text-[13px] text-slate-700 md:p-6">
+      <div className="mx-auto max-w-[1500px] rounded-3xl border border-rose-200/60 bg-white shadow-2xl shadow-rose-900/5">
+
+        {/* ── TOP BAR ──────────────────────────────────────── */}
+        <header
+          className="relative flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-t-3xl border-b border-white/10 px-6 py-4 text-white shadow-xl"
+          style={{ background: 'linear-gradient(135deg, #881337 0%, #be123c 45%, #9f1239 100%)' }}
+        >
+          <div className="pointer-events-none absolute -left-10 -top-16 h-40 w-40 rounded-full bg-rose-300/20 blur-3xl" />
+          <div className="pointer-events-none absolute -right-10 -bottom-16 h-40 w-40 rounded-full bg-pink-300/20 blur-3xl" />
+
+          <div className="relative flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-300 to-rose-600 shadow-lg shadow-rose-950/40 ring-1 ring-white/25">
+              <RefreshCcw size={19} className="text-white" />
+            </span>
+            <div>
+              <h1 className="text-[16px] font-bold leading-tight tracking-wide text-white">Billing Return</h1>
+              <p className="text-[11.5px] font-medium text-rose-100/70">Credit note entry</p>
+            </div>
+          </div>
+
+          <div className="relative hidden h-9 w-px bg-rose-200/20 sm:block" />
+
+          {/* Return all switch */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={returnAll}
+            disabled={items.length === 0}
+            onClick={() => handleReturnAll(!returnAll)}
+            className="relative flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:pointer-events-none disabled:opacity-40"
+          >
+            <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${returnAll ? 'bg-rose-200' : 'bg-rose-950/60 ring-1 ring-inset ring-white/15'}`}>
+              <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full shadow-md transition-transform duration-200 ${returnAll ? 'translate-x-4 bg-rose-700' : 'bg-white'}`} />
+            </span>
+            <span className="text-[12.5px] font-semibold text-rose-50/90">Return all</span>
+          </button>
+
+          <button type="button" onClick={handleClearAll} disabled={!isReturnActive} className={`relative ${btn.headerGhost}`}>
+            <Eraser size={14} />
+            Clear all
+          </button>
+
+          {isReturnActive && (
+            <div className="relative flex items-center gap-2 rounded-xl border border-rose-200/25 bg-rose-950/30 px-3 py-1.5">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-200" />
+              <span className="text-[12px] font-semibold text-rose-50">
+                {adjustmentList.length} item{adjustmentList.length > 1 ? 's' : ''} selected
+              </span>
+            </div>
+          )}
+
+          <div className="relative ml-auto">
+            <button type="button" onClick={() => navigate('/billing-return-v4-list')} className={btn.headerWhite}>
+              <List size={15} />
+              View all returns
+            </button>
+          </div>
+        </header>
+
+        {/* ── ERROR BANNER ─────────────────────────────────── */}
+        {printError && (
+          <div role="alert" className="flex items-start gap-3 border-b border-red-200 bg-red-50 px-6 py-3 text-red-700">
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-[13px] font-bold">Something went wrong</p>
+              <p className="mt-0.5 text-[12px] text-red-600">{printError}</p>
+            </div>
+            <button
+              type="button" onClick={() => setPrintError(null)} aria-label="Dismiss"
+              className="rounded-lg p-1 text-red-500 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* ── INVOICE REFERENCE ────────────────────────────── */}
+        <Section icon={ClipboardList} title="Invoice reference & header" subtitle="Search the original invoice to load its items" tone="rose" bodyClass="bg-rose-50/30">
+          <div className="grid grid-cols-12 gap-4">
+            <Field label="Search & load invoice" htmlFor="invoiceSearch" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <IconInput
+                id="invoiceSearch" icon={Search} iconClass="text-rose-400" autoComplete="off"
+                placeholder="Type invoice number..."
+                value={invoiceSearch}
+                onChange={e => handleInvoiceSearchChange(e.target.value)}
+                onKeyDown={handleInvoiceSearchKeyDown}
+                right={isLoadingInvoice ? <Loader2 size={15} className="animate-spin text-rose-400" /> : null}
+              />
+              {loadError && (
+                <p className="flex items-center gap-1 text-[11.5px] font-medium text-red-600">
+                  <AlertCircle size={12} /> {loadError}
+                </p>
+              )}
+            </Field>
+
+            <Field label="Invoice no. (loaded)" htmlFor="invoiceNo" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <input id="invoiceNo" className={`${inputCls} ${roInput} !font-bold !text-rose-700`} placeholder="INV/2024/0001" value={invoiceNo} readOnly />
+            </Field>
+
+            <Field label="Invoice date" htmlFor="invoiceDate" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <div className="relative">
+                <Calendar size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-rose-400" />
+                <DatePicker
+                  id="invoiceDate"
+                  selected={invoiceDate} onChange={d => d && setInvoiceDate(d)}
+                  dateFormat="dd MMM yyyy" showYearDropdown showMonthDropdown dropdownMode="select"
+                  wrapperClassName="!block w-full" popperClassName="!z-50"
+                  className={`${inputCls} pl-9`}
+                  calendarClassName="!rounded-xl !border !border-rose-200 !shadow-xl"
+                />
+              </div>
+            </Field>
+
+            <Field label="Time" htmlFor="invoiceTime" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <div className="relative">
+                <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-rose-400" />
+                <DatePicker
+                  id="invoiceTime"
+                  selected={invoiceTime} onChange={t => t && setInvoiceTime(t)}
+                  showTimeSelect showTimeSelectOnly timeIntervals={5} timeCaption="Time" dateFormat="hh:mm aa"
+                  wrapperClassName="!block w-full" popperClassName="!z-50"
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
+            </Field>
+          </div>
+        </Section>
+
+        {/* ── CUSTOMER ─────────────────────────────────────── */}
+        <Section icon={Users} title="Customer details" subtitle="Filled automatically from the loaded invoice" tone="rose" bodyClass="bg-white">
+          <div className="grid grid-cols-12 gap-4">
+            <Field label="Customer ID" htmlFor="customerId" className="col-span-12 sm:col-span-6 lg:col-span-2">
+              <IconInput id="customerId" icon={Hash} className="!bg-slate-50" placeholder="CUST-001" />
+            </Field>
+
+            <Field label="Customer name" htmlFor="customerName" className="col-span-12 sm:col-span-6 lg:col-span-4">
+              <div className="relative">
+                <User size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="customerName"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={showCustomerDropdown}
+                  aria-autocomplete="list"
+                  className={`${inputCls} pl-9 !font-bold`}
+                  placeholder="Search or enter name..."
+                  value={customerSearch}
+                  onChange={e => { setCustomerSearch(e.target.value); searchCustomers(e.target.value); }}
+                  onKeyDown={handleCustomerKeyDown}
+                  onFocus={() => customerSuggestions.length > 0 && setShowCustomerDropdown(true)}
+                  onBlur={() => {
+                    if (customerTimer.current) clearTimeout(customerTimer.current);
+                    setShowCustomerDropdown(false);
+                  }}
+                />
+                {showCustomerDropdown && customerSuggestions.length > 0 && (
+                  <div
+                    ref={customerDropdownRef}
+                    role="listbox"
+                    onMouseDown={e => e.preventDefault()}
+                    className="absolute left-0 top-full z-30 mt-1.5 max-h-56 w-full min-w-[280px] overflow-y-auto rounded-2xl border border-rose-200 bg-white p-1.5 shadow-2xl shadow-rose-900/10"
+                  >
+                    {customerSuggestions.map((c, i) => (
+                      <div
+                        key={c.customerId ?? i}
+                        role="option"
+                        aria-selected={i === customerHighlight}
+                        onMouseEnter={() => setCustomerHighlight(i)}
+                        onMouseDown={e => { e.preventDefault(); selectCustomer(c); }}
+                        className={`cursor-pointer rounded-xl px-3 py-2.5 transition-colors ${i === customerHighlight ? 'bg-rose-50 ring-1 ring-inset ring-rose-200' : ''}`}
+                      >
+                        <p className="text-[13px] font-bold text-slate-700">{c.customerName}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">{[c.gstin, c.state].filter(Boolean).join('  •  ')}</p>
+                      </div>
+                    ))}
+                  </div>
                 )}
+              </div>
+            </Field>
 
-                {/* ── TOP BAR ──────────────────────────────────────── */}
-                <div
-                    className="flex items-center gap-4 px-5 py-3.5 text-white border-b border-white/10 shadow-xl"
-                    style={{ background: 'linear-gradient(135deg, #881337 0%, #be123c 45%, #9f1239 100%)' }}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-br from-rose-300 to-rose-600 p-2.5 rounded-xl shadow-lg ring-1 ring-white/20">
-                            <RefreshCcw size={18} className="text-white" />
-                        </div>
-                        <div>
-                            <p className="font-black text-sm tracking-widest text-white uppercase">Billing Return</p>
-                            <p className="text-[9px] text-rose-200/60 uppercase tracking-[0.2em] font-medium">Credit Note Entry</p>
-                        </div>
-                    </div>
+            <Field label="GST number" htmlFor="gstin" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <IconInput id="gstin" icon={Landmark} className={`uppercase ${roInput}`} placeholder="27AAAAA0000A1Z5" value={selectedCustomer?.gstin || ''} readOnly />
+            </Field>
 
-                    <div className="h-8 w-px bg-rose-400/20 mx-1" />
+            <Field label="Mobile" htmlFor="mobile" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <IconInput id="mobile" icon={Phone} className={roInput} placeholder="98XXXXXXXX" value={selectedCustomer?.mobileNo || ''} readOnly />
+            </Field>
+          </div>
+        </Section>
 
-                    {/* Return All toggle */}
-                    <label className="flex items-center gap-2 cursor-pointer select-none group">
-                        <input
-                            type="checkbox"
-                            checked={returnAll}
+        {/* ── ITEM TABLE ───────────────────────────────────── */}
+        <Section
+          icon={Package}
+          title="Return items"
+          subtitle="Click the return icon on a row, type the quantity, press Enter to confirm and move to the next row"
+          tone="slate"
+          bodyClass="bg-white"
+        >
+          <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1150px] border-collapse">
+                <thead>
+                  <tr
+                    className="divide-x divide-white/5 border-b border-white/10 text-[11.5px] font-semibold"
+                    style={{ background: 'linear-gradient(180deg, #1a0808 0%, #111111 100%)' }}
+                  >
+                    <th className="w-12 p-3.5 text-center text-slate-500">#</th>
+                    <th className="min-w-[240px] bg-white/[0.02] p-3.5 text-left text-slate-100/90">Item description</th>
+                    <th className="w-24 p-3.5 text-center text-slate-400">Batch</th>
+                    <th className="w-28 bg-slate-800/30 p-3.5 text-right text-slate-300/70">Rate</th>
+                    <th className="w-20 bg-slate-800/30 p-3.5 text-right text-slate-300/70">Qty</th>
+                    <th className="w-20 p-3.5 text-right text-blue-300/80">Avail</th>
+                    <th className="w-32 bg-rose-400/[0.08] p-3.5 text-right font-bold text-rose-300 shadow-[inset_0_-2px_0_rgba(244,63,94,0.25)]">Return qty</th>
+                    <th className="w-28 p-3.5 text-right font-medium text-slate-500">Gross</th>
+                    <th className="w-20 bg-rose-400/[0.03] p-3.5 text-right text-rose-400/70">Disc %</th>
+                    <th className="w-28 bg-[#1c1c1c] p-3.5 text-right text-slate-200">Taxable</th>
+                    <th className="w-24 p-3.5 text-right text-slate-400">GST %</th>
+                    <th className="w-36 bg-emerald-500/[0.08] p-3.5 text-right font-bold text-emerald-300 shadow-[inset_0_-2px_0_rgba(16,185,129,0.25)]">Total</th>
+                    <th className="w-20 p-3.5 text-center text-slate-500">Return</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={13} className="px-6 py-14 text-center">
+                        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-400 ring-1 ring-rose-100">
+                          <Package size={22} />
+                        </span>
+                        <p className="text-[14px] font-semibold text-slate-700">No invoice loaded yet</p>
+                        <p className="mt-1 text-[12px] text-slate-400">Search an invoice number above to load its items for return.</p>
+                      </td>
+                    </tr>
+                  )}
+
+                  {items.map((item, idx) => {
+                    const isEditing = editingId === item.id;
+                    const avail = getAvail(item);
+                    const hasReturn = Number(item.returnQty) > 0;
+                    const soldOut = avail === 0;
+
+                    return (
+                      <tr key={item.id} className={`transition-colors duration-100 ${hasReturn ? 'bg-rose-50/40' : 'hover:bg-rose-50/20'} ${isEditing ? '!bg-rose-50/60' : ''}`}>
+                        <td className="px-3 py-3 text-center align-middle">
+                          <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${hasReturn ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'}`}>
+                            {idx + 1}
+                          </span>
+                        </td>
+
+                        {/* Item */}
+                        <td className="px-3 py-3 align-middle">
+                          <p className="text-[13px] font-semibold text-slate-700">{item.itemName || '—'}</p>
+                          <p className="mt-0.5 text-[11px] tabular-nums text-slate-400">
+                            <span className={`font-semibold ${hasReturn ? 'text-rose-500' : 'text-slate-500'}`}>{hasReturn ? 'Return' : 'Invoice'}</span>
+                            &nbsp;•&nbsp; Disc ₹{fmtINR(item.active.disc)}
+                            {item.isIgst
+                              ? <> &nbsp;•&nbsp; IGST ₹{fmtINR(item.split.igst)}</>
+                              : <> &nbsp;•&nbsp; CGST ₹{fmtINR(item.split.cgst)} &nbsp;•&nbsp; SGST ₹{fmtINR(item.split.sgst)}</>}
+                          </p>
+                        </td>
+
+                        <td className="px-3 py-3 text-center align-middle text-[12px] text-slate-500">{item.batch || '—'}</td>
+                        <td className="bg-slate-50/30 px-3 py-3 text-right align-middle text-[13px] font-medium tabular-nums text-slate-600">{item.rate === 0 ? '—' : fmtINR(item.rate)}</td>
+                        <td className="bg-slate-50/30 px-3 py-3 text-right align-middle text-[13px] font-bold tabular-nums text-slate-600">{item.qty}</td>
+                        <td className="bg-blue-50/30 px-3 py-3 text-right align-middle text-[13px] font-bold tabular-nums text-blue-600">{avail}</td>
+
+                        {/* Return qty */}
+                        <td className="bg-rose-50/30 px-2 py-2 align-middle">
+                          <input
+                            ref={el => { returnQtyRefs.current[idx] = el; }}
+                            className={`h-9 w-full rounded-lg border px-2.5 text-right text-[13px] font-black tabular-nums outline-none transition-all duration-150 ${
+                              isEditing
+                                ? 'border-rose-300 bg-white text-rose-700 ring-4 ring-rose-100'
+                                : 'cursor-default border-transparent bg-transparent text-slate-500'
+                            }`}
+                            type="text" inputMode="numeric" autoComplete="off"
+                            aria-label={`Return quantity for ${item.itemName || `item ${idx + 1}`}`}
+                            disabled={!isEditing}
+                            value={Number(item.returnQty) === 0 ? '' : item.returnQty}
+                            placeholder={isEditing ? `max ${avail}` : '—'}
                             onChange={e => {
-                                setReturnAll(e.target.checked);
-                                if (e.target.checked) setItems(items.map(i => ({ ...i, returnQty: i.qty })));
+                              const raw = e.target.value;
+                              if (raw !== '' && !/^\d+$/.test(raw)) return;
+                              let v = raw === '' ? 0 : parseInt(raw, 10);
+                              if (v > avail) v = avail;
+                              setReturnQty(item.id, v);
+                              if (returnAll) setReturnAll(false);
                             }}
-                            className="w-3.5 h-3.5 accent-rose-300"
-                        />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-200/80">Return All</span>
-                    </label>
+                            onKeyDown={e => handleReturnQtyKeyDown(e, idx)}
+                          />
+                        </td>
 
-                    {/* Clear All toggle */}
-                    <label className="flex items-center gap-2 cursor-pointer select-none group">
-                        <input
-                            type="checkbox"
-                            checked={clearAll}
-                            onChange={e => {
-                                if (e.target.checked) {
-                                    setClearAll(true);
-                                    setItems(items.map(i => ({ ...i, returnQty: 0 })));
-                                    setReturnAll(false);
-                                    setTimeout(() => setClearAll(false), 300);
-                                }
-                            }}
-                            className="w-3.5 h-3.5 accent-red-400"
-                        />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-200/80">Clear All</span>
-                    </label>
+                        <td className="px-3 py-3 text-right align-middle text-[12px] font-medium tabular-nums text-slate-400">{fmtINR(item.grossAmount)}</td>
+                        <td className="px-3 py-3 text-right align-middle text-[13px] tabular-nums text-slate-500">{item.discP || 0}</td>
+                        <td className="bg-slate-50/50 px-3 py-3 text-right align-middle text-[12.5px] font-semibold tabular-nums text-slate-700">{fmtINR(item.taxableAmt)}</td>
+                        <td className="px-3 py-3 text-right align-middle">
+                          <span className="inline-block rounded-lg bg-rose-50/70 px-2.5 py-1 text-[13px] font-black tabular-nums text-rose-600">{item.gstP}</span>
+                        </td>
+                        <td className={`px-3 py-3 text-right align-middle text-[13px] font-black tabular-nums ${hasReturn ? 'bg-rose-50/40 text-rose-700' : 'bg-emerald-50/20 text-slate-900'}`}>
+                          ₹{fmtINR(item.lineTotal)}
+                        </td>
 
-                    {isReturnActive && (
-                        <div className="flex items-center gap-1.5 ml-2 px-3 py-1.5 bg-rose-900/40 rounded-lg border border-rose-400/20">
-                            <span className="w-1.5 h-1.5 bg-rose-300 rounded-full animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-rose-100">
-                                {adjustmentList.length} Item{adjustmentList.length > 1 ? 's' : ''} Selected
-                            </span>
-                        </div>
-                    )}
+                        {/* Toggle edit */}
+                        <td className="px-2 py-2 text-center align-middle">
+                          <button
+                            type="button"
+                            onClick={() => toggleEdit(item.id)}
+                            disabled={soldOut}
+                            aria-pressed={isEditing}
+                            aria-label={isEditing ? 'Confirm return quantity' : 'Enable return for this item'}
+                            title={soldOut ? 'Fully returned' : isEditing ? 'Confirm' : 'Enable return'}
+                            className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:pointer-events-none disabled:opacity-30 ${
+                              isEditing
+                                ? 'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-200'
+                                : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+                            }`}
+                          >
+                            {isEditing ? <CheckCircle size={16} strokeWidth={2.5} /> : <RotateCcw size={15} />}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Section>
 
-                    {/* BUTTON MOVED TO RIGHT SIDE, COMPACT SIZE */}
-                    <button
-                        onClick={() => navigate('/billing-return-v4-list')}
-                        className="ml-auto px-3.5 py-1 text-xs font-bold text-[#880d2e] 
-        bg-white border border-transparent rounded-md shadow-sm hover:bg-pink-50
-         focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 
-         focus:ring-offset-[#881337] transition-all duration-200 cusrsor-pointer"
-                    >
-                        View List
-                    </button>
-                </div>
+        {/* ── SUMMARY ──────────────────────────────────────── */}
+        <Section
+          icon={Receipt}
+          title={isReturnActive ? 'Return summary' : 'Invoice summary'}
+          subtitle={isReturnActive ? 'Showing totals for the selected return quantities' : 'Showing totals for the loaded invoice'}
+          tone="blue"
+          bodyClass="bg-white"
+        >
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <StatCard
+                title={isReturnActive ? 'Return tax adjustments' : 'Taxes & adjustments'}
+                boxCls={isReturnActive ? 'border-rose-200 bg-rose-50/50' : 'border-slate-200 bg-slate-50'}
+                bar={isReturnActive ? 'bg-rose-500' : 'bg-blue-500'}
+                text={isReturnActive ? 'text-rose-600' : 'text-blue-600'}
+              >
+                <StatRow label="Total CGST" value={`₹ ${fmtINR(isReturnActive ? returnTotals.cgst : totals.totalCgst)}`} tone={isReturnActive ? 'text-rose-700' : 'text-black'} />
+                <StatRow label="Total SGST" value={`₹ ${fmtINR(isReturnActive ? returnTotals.sgst : totals.totalSgst)}`} tone={isReturnActive ? 'text-rose-700' : 'text-black'} />
+                <StatRow label="Total IGST" value={`₹ ${fmtINR(isReturnActive ? returnTotals.igst : totals.totalIgst)}`} tone={isReturnActive ? 'text-rose-700' : 'text-black'} />
+                <StatRow label="Round off" value={`₹ ${isReturnActive ? '0.00' : totals.roundOff}`} tone="text-rose-600" />
+              </StatCard>
 
-                {/* ── SECTION: INVOICE HEADER ──────────────────────── */}
-                <div className="bg-rose-50/30">
-                    <div className="flex items-center gap-2 px-5 py-2.5 bg-rose-100/50 border-b border-rose-200/60">
-                        <div className="w-1 h-3.5 rounded-full bg-rose-500" />
-                        <span className="text-[10px] font-black text-rose-800 uppercase tracking-[0.15em]">Invoice Reference & Header</span>
-                    </div>
-
-                    <div className="grid grid-cols-12 divide-x divide-rose-200/40">
-                        {/* Search Invoice */}
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40 bg-rose-50/40">
-                            <Field label="Search & Load Invoice">
-                                <div className="relative">
-                                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400" />
-                                    <input
-                                        className={`${inputCls} pl-9`}
-                                        placeholder="Type invoice number..."
-                                        onChange={e => { setInvoiceNo(e.target.value); getInvoiceByNumber(e.target.value); }}
-                                    />
-                                </div>
-                            </Field>
-                        </div>
-
-                        {/* Invoice No */}
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40">
-                            <Field label="Invoice No (Loaded)">
-                                <input className={`${inputCls} font-bold text-rose-700`} placeholder="INV/2024/0001" value={invoiceNo} readOnly />
-                            </Field>
-                        </div>
-
-                        {/* Invoice Date */}
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40">
-                            <Field label="Invoice Date">
-                                <div className="relative">
-                                    <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 z-10" />
-                                    <DatePicker selected={invoiceDate} onChange={d => setInvoiceDate(d)} dateFormat="dd MMM yyyy"
-                                        showYearDropdown showMonthDropdown dropdownMode="select"
-                                        className="w-full border border-rose-200 rounded-lg px-3 py-2 pl-9 bg-white font-medium text-slate-700 text-[12px] outline-none shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100 h-[38px]" />
-                                </div>
-                            </Field>
-                        </div>
-
-                        {/* Time */}
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40">
-                            <Field label="Time">
-                                <div className="relative">
-                                    <Clock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 z-10" />
-                                    <DatePicker selected={invoiceTime} onChange={t => setInvoiceTime(t)}
-                                        showTimeSelect showTimeSelectOnly timeIntervals={5} timeCaption="Time" dateFormat="hh:mm aa"
-                                        className="w-full border border-rose-200 rounded-lg px-3 py-2 pl-9 bg-white font-medium text-slate-700 text-[12px] outline-none shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-100 h-[38px]" />
-                                </div>
-                            </Field>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── SECTION: CUSTOMER ────────────────────────────── */}
-                <div className="border-t border-rose-200/60">
-                    <div className="flex items-center gap-2 px-5 py-2.5 bg-rose-100/30 border-b border-rose-200/60">
-                        <div className="w-1 h-3.5 rounded-full bg-rose-400" />
-                        <span className="text-[10px] font-black text-rose-800 uppercase tracking-[0.15em]">Customer Details</span>
-                    </div>
-
-                    <div className="grid grid-cols-12 divide-x divide-rose-200/30">
-                        <div className="col-span-12 md:col-span-2 p-4 border-b border-rose-200/30 bg-slate-50/40">
-                            <Field label="Customer ID">
-                                <div className="relative">
-                                    <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input className={`${inputCls} pl-9`} placeholder="CUST-001" />
-                                </div>
-                            </Field>
-                        </div>
-
-                        <div className="col-span-12 md:col-span-4 p-4 border-b border-rose-200/30">
-                            <Field label="Customer Name">
-                                <div className="relative">
-                                    <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        className={`${inputCls} pl-9 font-bold`}
-                                        placeholder="Search or enter name..."
-                                        value={customerSearch}
-                                        onChange={e => { setCustomerSearch(e.target.value); searchCustomers(e.target.value); }}
-                                        onFocus={() => customerSuggestions.length > 0 && setShowCustomerDropdown(true)}
-                                        onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-                                    />
-                                    {showCustomerDropdown && customerSuggestions.length > 0 && (
-                                        <div className="absolute z-10 w-full bg-white border border-rose-200 rounded-xl shadow-2xl max-h-44 overflow-y-auto mt-1.5 divide-y divide-rose-50">
-                                            {customerSuggestions.map((c, i) => (
-                                                <div key={i} className="px-4 py-2.5 hover:bg-rose-50 cursor-pointer transition-colors" onClick={() => selectCustomer(c)}>
-                                                    <p className="font-bold text-slate-700 text-[12px]">{c.customerName}</p>
-                                                    <p className="text-[10px] text-slate-400 mt-0.5">{c.gstin} · {c.state}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </Field>
-                        </div>
-
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/30 bg-rose-50/10">
-                            <Field label="GST Number">
-                                <div className="relative">
-                                    <Landmark size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input className={`${inputCls} pl-9 uppercase`} placeholder="27AAAAA0000A1Z5"
-                                        value={selectedCustomer?.gstin || ''} readOnly />
-                                </div>
-                            </Field>
-                        </div>
-
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/30">
-                            <Field label="Mobile">
-                                <div className="relative">
-                                    <Send size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input className={`${inputCls} pl-9`} placeholder="98XXXXXXXX"
-                                        value={selectedCustomer?.mobileNo || ''} readOnly />
-                                </div>
-                            </Field>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── ITEM TABLE ───────────────────────────────────── */}
-                <div className="overflow-x-auto border-t border-slate-200">
-                    <table className="w-full border-collapse">
-                        <thead>
-                            <tr
-                                className="text-[10px] uppercase tracking-widest font-semibold divide-x divide-white/5 border-b border-white/10"
-                                style={{ background: 'linear-gradient(180deg, #1a0808 0%, #111111 100%)' }}
-                            >
-                                <th className="p-3.5 w-12 text-center text-slate-600">#</th>
-                                <th className="p-3.5 min-w-[220px] text-left text-slate-100/90 bg-white/[0.02]">Item Description</th>
-                                <th className="p-3.5 w-24 text-center text-slate-400">Batch</th>
-                                <th className="p-3.5 w-28 text-center text-slate-300/60 bg-slate-800/30">Rate</th>
-                                <th className="p-3.5 w-20 text-center text-slate-300/60 bg-slate-800/30">Qty</th>
-                                <th className="p-3.5 w-20 text-center text-blue-300/80">Avail</th>
-                                <th className="p-3.5 w-28 text-center text-rose-300 font-bold bg-rose-400/[0.08] shadow-[inset_0_-2px_0_rgba(244,63,94,0.2)]">Return Qty</th>
-                                <th className="p-3.5 w-28 text-center text-slate-500/50">Gross</th>
-                                <th className="p-3.5 w-20 text-center text-rose-400/60 bg-rose-400/[0.02]">Disc%</th>
-                                <th className="p-3.5 w-28 text-center text-slate-200 bg-[#1c1c1c]">Taxable</th>
-                                <th className="p-3.5 w-24 text-center text-slate-400">GST%</th>
-                                <th className="p-3.5 w-32 text-center text-emerald-300 font-bold bg-emerald-500/[0.07] shadow-[inset_0_-2px_0_rgba(16,185,129,0.18)]">Total</th>
-                                <th className="p-3.5 w-24 text-center text-slate-500">Act.</th>
-                            </tr>
-                        </thead>
-
-                        <tbody className="bg-white divide-y divide-slate-100/80">
-                            {items.map((item, idx) => {
-                                const isEditing = editingId === item.id;
-                                const availQty = getAvailableQuantity(item.itemId) || item.qty;
-                                const hasReturn = item.returnQty > 0;
-
-                                return (
-                                    <React.Fragment key={item.id}>
-                                        <tr className={`group transition-colors duration-100 ${hasReturn ? 'bg-rose-50/30' : 'hover:bg-rose-50/10'}`}>
-
-                                            {/* Sr */}
-                                            <td className="p-3 text-center border-r border-slate-100">
-                                                <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center mx-auto ${hasReturn ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                    {idx + 1}
-                                                </span>
-                                            </td>
-
-                                            {/* Item Name */}
-                                            <td className="p-1.5 border-r border-slate-100">
-                                                <input
-                                                    className="w-full bg-transparent border-none focus:bg-blue-50/20 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 placeholder:text-slate-300 outline-none font-medium transition-all"
-                                                    type="text" value={item.itemName}
-                                                    onChange={e => handleItemChange(idx, 'itemName', e.target.value)}
-                                                    placeholder="Enter product name..."
-                                                />
-                                            </td>
-
-                                            {/* Batch */}
-                                            <td className="p-1.5 border-r border-slate-100">
-                                                <input className="w-full bg-transparent border-none rounded-lg px-2 py-1.5 text-[12px] text-slate-500 outline-none text-center"
-                                                    type="text" value={item.batch || ''} readOnly placeholder="—" />
-                                            </td>
-
-                                            {/* Rate */}
-                                            <td className="p-1.5 border-r border-slate-100 bg-slate-50/20">
-                                                <input className="w-full bg-transparent border-none rounded-lg px-2 py-1.5 text-right text-[13px] text-slate-600 outline-none font-medium"
-                                                    type="text" value={item.rate === 0 ? '' : item.rate} readOnly />
-                                            </td>
-
-                                            {/* Qty */}
-                                            <td className="p-1.5 border-r border-slate-100 bg-slate-50/20">
-                                                <input className="w-full bg-transparent border-none rounded-lg px-2 py-1.5 text-right text-[13px] font-bold text-slate-600 outline-none"
-                                                    type="text" value={item.qty === 0 ? '' : item.qty} readOnly />
-                                            </td>
-
-                                            {/* Available */}
-                                            <td className="px-3 py-2 text-right font-bold text-blue-600 text-[12px] border-r border-slate-100 bg-blue-50/20">
-                                                {availQty}
-                                            </td>
-
-                                            {/* Return Qty — editable only when toggled */}
-                                            <td className="p-1.5 border-r border-slate-100 bg-rose-50/20">
-                                                <input
-                                                    className={`w-full border-none rounded-lg px-2 py-1.5 text-right text-[13px] font-black outline-none transition-all ${isEditing
-                                                        ? 'bg-rose-50 text-rose-700 ring-2 ring-rose-300/40'
-                                                        : 'bg-transparent text-slate-400 cursor-not-allowed'
-                                                        }`}
-                                                    type="number" min="0"
-                                                    disabled={!isEditing}
-                                                    value={item.returnQty === 0 ? '' : item.returnQty}
-                                                    onChange={e => {
-                                                        let v = Number(e.target.value);
-                                                        if (v < 0) v = 0;
-                                                        if (v > availQty) v = availQty;
-                                                        handleItemChange(idx, 'returnQty', v);
-                                                    }}
-                                                    placeholder={isEditing ? '0' : '—'}
-                                                />
-                                            </td>
-
-                                            {/* Gross */}
-                                            <td className="px-3 py-2 text-right text-slate-400 font-medium text-[11px] border-r border-slate-100">
-                                                {(item.grossAmount || 0).toFixed(2)}
-                                            </td>
-
-                                            {/* Disc % */}
-                                            <td className="p-1.5 border-r border-slate-100">
-                                                <input className="w-full bg-transparent border-none rounded-lg px-2 py-1.5 text-right text-[13px] text-slate-500 outline-none"
-                                                    type="text" value={item.discP || '0'} readOnly />
-                                            </td>
-
-                                            {/* Taxable */}
-                                            <td className="px-3 py-2 text-right font-semibold text-slate-700 text-[12px] border-r border-slate-100 bg-slate-50/50">
-                                                {(item.taxableAmt || 0).toFixed(2)}
-                                            </td>
-
-                                            {/* GST % */}
-                                            <td className="p-1.5 border-r border-slate-100">
-                                                <div className="w-full bg-rose-50/60 rounded-lg px-2 py-1.5 text-right text-[13px] font-black text-rose-600">
-                                                    {item.gstP}
-                                                </div>
-                                            </td>
-
-                                            {/* Line Total */}
-                                            <td className={`px-3 py-2 text-right font-black text-[13px] border-r border-slate-100 ${hasReturn ? 'text-rose-700 bg-rose-50/30' : 'text-slate-900 bg-emerald-50/20'}`}>
-                                                ₹{(item.lineTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                            </td>
-
-                                            {/* Toggle Edit */}
-                                            <td className="p-2 text-center">
-                                                <button
-                                                    onClick={() => toggleEdit(item.id)}
-                                                    className={`w-8 h-8 rounded-xl flex items-center justify-center mx-auto transition-all duration-200 ${isEditing
-                                                        ? 'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-200 scale-110'
-                                                        : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-600'
-                                                        }`}
-                                                    title={isEditing ? 'Confirm' : 'Enable Return'}
-                                                >
-                                                    {isEditing ? <CheckCircle size={15} strokeWidth={2.5} /> : <RotateCcw size={15} />}
-                                                </button>
-                                            </td>
-                                        </tr>
-
-                                        {/* Tax sub-row */}
-                                        <tr className="bg-gradient-to-r from-slate-50/60 to-transparent text-[9.5px] text-slate-400 border-b border-slate-100/60">
-                                            <td colSpan={3} className="py-1.5 px-4 text-right text-[9px] font-bold text-slate-300 uppercase tracking-widest border-r border-slate-100/60">
-                                                {hasReturn ? 'Return Detail' : 'Tax Detail'}
-                                            </td>
-                                            <td colSpan={2} className="py-1.5 px-3 border-r border-slate-100/60">
-                                                <span className="text-rose-400 font-semibold uppercase text-[9px]">Disc</span>
-                                                <span className="text-slate-700 font-bold ml-1.5 text-[10px]">
-                                                    ₹{((parseFloat(item.discP) || 0) / 100 * (item.rate * (item.returnQty || item.qty))).toFixed(2)}
-                                                </span>
-                                            </td>
-                                            {(() => {
-                                                const aq = item.returnQty > 0 ? item.returnQty : item.qty;
-                                                const taxable = item.rate * aq * (1 - (item.discP || 0) / 100);
-                                                const split = (taxable * (item.gstP || 0) / 100 / 2).toFixed(2);
-                                                return (
-                                                    <>
-                                                        <td colSpan={2} className="py-1.5 px-3 border-r border-slate-100/60">
-                                                            <span className="text-slate-400">CGST</span>
-                                                            <span className={`font-bold ml-1.5 text-[10px] ${hasReturn ? 'text-rose-600' : 'text-slate-700'}`}>₹{split}</span>
-                                                        </td>
-                                                        <td colSpan={2} className="py-1.5 px-3 border-r border-slate-100/60">
-                                                            <span className="text-slate-400">SGST</span>
-                                                            <span className={`font-bold ml-1.5 text-[10px] ${hasReturn ? 'text-rose-600' : 'text-slate-700'}`}>₹{split}</span>
-                                                        </td>
-                                                    </>
-                                                );
-                                            })()}
-                                            <td colSpan={4} />
-                                        </tr>
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* ── SUMMARY ──────────────────────────────────────── */}
-                <div className="border-t border-slate-200 bg-white">
-                    <div className="p-6 space-y-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-                            {/* Tax Box */}
-                            <div className={`rounded-2xl border p-5 space-y-4 transition-all duration-300 ${isReturnActive ? 'bg-rose-50/50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
-                                <div className="flex items-center gap-2 pb-3 border-b border-inherit">
-                                    <div className={`w-1.5 h-4 rounded-full ${isReturnActive ? 'bg-rose-500' : 'bg-blue-500'}`} />
-                                    <h4 className={`text-[10px] font-black uppercase tracking-[0.15em] ${isReturnActive ? 'text-rose-600' : 'text-blue-600'}`}>
-                                        {isReturnActive ? 'Return Tax Adjustments' : 'Taxes & Adjustments'}
-                                    </h4>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[
-                                        { label: 'Total CGST', value: (isReturnActive ? returnTotals.gst / 2 : totals.totalGST / 2).toFixed(2) },
-                                        { label: 'Total SGST', value: (isReturnActive ? returnTotals.gst / 2 : totals.totalGST / 2).toFixed(2) },
-                                        { label: 'Total IGST', value: '0.00' },
-                                        { label: 'Round Off', value: totals.roundOff, accent: true },
-                                    ].map(({ label, value, accent }) => (
-                                        <div key={label} className="flex flex-col gap-0.5">
-                                            <span className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">{label}</span>
-                                            <span className={`font-black text-lg ${accent ? 'text-rose-600' : isReturnActive ? 'text-rose-700' : 'text-black'}`}>₹ {value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Financial Box */}
-                            <div className={`rounded-2xl border p-5 space-y-4 transition-all duration-300 ${isReturnActive ? 'bg-rose-50/30 border-rose-100' : 'bg-blue-50/20 border-blue-100'}`}>
-                                <div className="flex items-center gap-2 pb-3 border-b border-inherit">
-                                    <div className={`w-1.5 h-4 rounded-full ${isReturnActive ? 'bg-rose-400' : 'bg-blue-400'}`} />
-                                    <h4 className={`text-[10px] font-black uppercase tracking-[0.15em] ${isReturnActive ? 'text-rose-600' : 'text-blue-600'}`}>
-                                        {isReturnActive ? 'Return Financials' : 'Invoice Totals'}
-                                    </h4>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[
-                                        { label: 'Total Gross', value: `₹ ${(isReturnActive ? returnTotals.gross : totals.totalGross).toFixed(2)}`, color: 'text-slate-900' },
-                                        { label: 'Total Disc', value: `−₹ ${(isReturnActive ? returnTotals.disc : totals.totalDisc).toFixed(2)}`, color: 'text-green-700' },
-                                        { label: 'Taxable Amt', value: `₹ ${(isReturnActive ? returnTotals.taxable : totals.totalTaxable).toFixed(2)}`, color: 'text-slate-700' },
-                                        { label: 'Total GST', value: `+₹ ${(isReturnActive ? returnTotals.gst : totals.totalGST).toFixed(2)}`, color: isReturnActive ? 'text-rose-600' : 'text-blue-600' },
-                                    ].map(({ label, value, color }) => (
-                                        <div key={label} className="flex flex-col gap-0.5">
-                                            <span className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">{label}</span>
-                                            <span className={`font-black text-lg ${color}`}>{value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Grand Total / Refund CTA */}
-                        <div
-                            onClick={() => { localStorage.setItem('activePaymentScreen', screenKey); setShowPaymentModal(true); }}
-                            className="w-full text-white p-6 rounded-2xl relative overflow-hidden cursor-pointer hover:shadow-2xl transition-all duration-300 active:scale-[0.99] group"
-                            style={{ background: isReturnActive ? 'linear-gradient(135deg, #881337 0%, #be123c 50%, #9f1239 100%)' : 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)' }}
-                        >
-                            <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
-                            <div className="relative z-10 flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3.5 bg-white/10 rounded-xl border border-white/15 group-hover:bg-white/15 transition-colors backdrop-blur-sm">
-                                        {isReturnActive ? <RotateCcw size={28} /> : <CreditCard size={28} />}
-                                    </div>
-                                    <div>
-                                        <p className="text-[9.5px] font-black uppercase tracking-[0.3em] text-white/80">
-                                            {isReturnActive ? 'Total Refund / Credit Amount' : 'Invoice Payable Amount'}
-                                        </p>
-                                        <p className="text-white/50 text-[10px] font-medium mt-0.5">
-                                            {isReturnActive ? 'Click to process Credit Note' : 'Click to proceed with payment'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="text-right flex items-end gap-0.5">
-                                    <span className="text-xl font-light text-white/70 mb-1">₹</span>
-                                    <span className="text-5xl font-black tracking-tight">
-                                        {(isReturnActive ? (returnTotals.taxable + returnTotals.gst) : totals.invoiceTotal).toLocaleString('en-IN')}
-                                    </span>
-                                    <span className="text-xl font-black mb-1 opacity-70">.00</span>
-                                </div>
-                            </div>
-                            <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none" />
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── CREDIT NOTE ADJUSTMENT TABLE ─────────────────── */}
-                {isAdjustmentActive && (
-                    <div className="border-t border-slate-200 p-6 space-y-4 bg-slate-50/40">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-1.5 h-8 bg-rose-600 rounded-full shadow-[0_0_10px_rgba(225,29,72,0.4)]" />
-                                <div>
-                                    <h3 className="text-base font-black text-slate-800 tracking-tight">Credit Note Summary</h3>
-                                    <p className="text-[9.5px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Adjustment ledger for returned stock</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg">
-                                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-                                <span className="text-rose-700 text-[10px] font-black uppercase tracking-tight">
-                                    {adjustmentList.length} Reversal {adjustmentList.length === 1 ? 'Line' : 'Lines'}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                                        <th className="py-3 px-5 text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-center w-16">#</th>
-                                        <th className="py-3 px-5 text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-left">Particulars</th>
-                                        <th className="py-3 px-5 text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-center">Qty</th>
-                                        <th className="py-3 px-5 text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Taxable Value</th>
-                                        <th className="py-3 px-5 text-[9.5px] font-bold text-rose-400/80 uppercase tracking-wider text-right">GST Credit</th>
-                                        <th className="py-3 px-5 text-right w-36">
-                                            <span className="px-3 py-1 bg-rose-600 text-white text-[9.5px] font-bold uppercase tracking-wider rounded-full">Sub-Total</span>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {adjustmentList.map((entry, i) => {
-                                        const taxable = entry.rate * entry.returnQty * (1 - (entry.discP || 0) / 100);
-                                        const gstCredit = taxable * (entry.gstP || 0) / 100;
-                                        const total = taxable + gstCredit;
-                                        return (
-                                            <tr key={entry.id} className="hover:bg-rose-50/20 transition-colors">
-                                                <td className="py-2 px-5 text-center font-mono text-[10px] text-slate-400">{String(i + 1).padStart(2, '0')}</td>
-                                                <td className="py-2 px-5">
-                                                    <div className="font-bold text-slate-700 text-[12px]">{entry.itemName}</div>
-                                                    <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Batch: {entry.batch || 'N/A'}</div>
-                                                </td>
-                                                <td className="py-2 px-5 text-center">
-                                                    <span className="text-[11px] font-black text-rose-700 bg-rose-50 w-8 h-8 flex items-center justify-center rounded-lg mx-auto border border-rose-100">
-                                                        {entry.returnQty}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2 px-5 text-right font-mono text-[11px] text-slate-600">₹{taxable.toFixed(2)}</td>
-                                                <td className="py-2 px-5 text-right font-mono text-[11px] text-rose-600 font-semibold">+₹{gstCredit.toFixed(2)}</td>
-                                                <td className="py-2 px-5 text-right font-bold text-[12px] text-slate-800">
-                                                    ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                                <tfoot className="border-t-2 border-slate-100">
-                                    <tr className="bg-rose-50/30">
-                                        <td colSpan={5} className="py-3 px-5 text-right text-[10px] font-bold text-rose-900/60 uppercase tracking-widest">Net Credit Value</td>
-                                        <td className="py-3 px-5 text-right">
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-base font-black text-rose-700">
-                                                    ₹{adjustmentList.reduce((sum, e) => {
-                                                        const t = e.rate * e.returnQty * (1 - (e.discP || 0) / 100);
-                                                        return sum + t * (1 + (e.gstP || 0) / 100);
-                                                    }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </span>
-                                                <div className="w-10 h-0.5 bg-rose-600 mt-0.5 rounded-full" />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── RETURN REASON ─────────────────────────────────── */}
-                <div className="border-t border-rose-200/50">
-                    <div className="flex items-center gap-2 px-5 py-2.5 bg-rose-100/30 border-b border-rose-200/40">
-                        <div className="w-1 h-3.5 rounded-full bg-rose-400" />
-                        <span className="text-[10px] font-black text-rose-800 uppercase tracking-[0.15em]">Return Reason & Remarks</span>
-                    </div>
-                    <div className="grid grid-cols-12 divide-x divide-rose-200/40">
-                        <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40">
-                            <Field label="Reason Code">
-                                <select className={inputCls} value={returnReasonCode} onChange={e => setReturnReasonCode(e.target.value)}>
-                                    <option value="DEFECT">Defect</option>
-                                    <option value="DAMAGE">Damage</option>
-                                    <option value="EXPIRY">Expiry</option>
-                                    <option value="QUALITY">Quality Issue</option>
-                                    <option value="EXCESS">Excess Stock</option>
-                                    <option value="WRONG_ITEM">Wrong Item</option>
-                                    <option value="OTHER">Other</option>
-                                </select>
-                            </Field>
-                        </div>
-                        <div className="col-span-12 md:col-span-4 p-4 border-b border-rose-200/40">
-                            <Field label="Reason Description">
-                                <input className={inputCls} placeholder="Detailed reason for return..." value={returnReasonText} onChange={e => setReturnReasonText(e.target.value)} />
-                            </Field>
-                        </div>
-                        <div className="col-span-12 md:col-span-5 p-4 border-b border-rose-200/40">
-                            <Field label="Remarks">
-                                <input className={inputCls} placeholder="Additional remarks..." value={returnRemarks} onChange={e => setReturnRemarks(e.target.value)} />
-                            </Field>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── RETURN HISTORY ───────────────────────────────── */}
-                {returnHistory && returnHistory.length > 0 && (
-                    <div className="border-t border-slate-200 p-5 bg-blue-50/20">
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="w-1 h-4 rounded-full bg-blue-400" />
-                            <h3 className="text-[10px] font-black text-blue-700 uppercase tracking-[0.15em]">Return History</h3>
-                            {isLoadingReturns && <span className="text-[10px] text-slate-400 animate-pulse">Loading...</span>}
-                        </div>
-                        <div className="space-y-2 max-h-36 overflow-y-auto">
-                            {returnHistory.map((ret, i) => (
-                                <div key={i} className="bg-white px-4 py-2.5 rounded-xl border border-blue-100 flex items-start justify-between gap-3">
-                                    <div>
-                                        <span className="font-bold text-slate-700 text-[11px]">{ret.returnNo}</span>
-                                        <span className="text-slate-400 text-[10px] ml-2">{ret.returnDate}</span>
-                                        <p className="text-[10px] text-slate-500 mt-0.5">{ret.reasonText}</p>
-                                    </div>
-                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[9px] font-bold uppercase">{ret.reasonCode}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── SHIPPING & NARRATION ──────────────────────────── */}
-                <div className="grid grid-cols-12 border-t border-rose-200/50 divide-x divide-rose-200/40">
-                    <div className="col-span-12 md:col-span-4 p-4 border-b border-rose-200/40">
-                        <Field label="Contact Person">
-                            <div className="relative">
-                                <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input className={`${inputCls} pl-9`} placeholder="In-charge name" />
-                            </div>
-                        </Field>
-                    </div>
-                    <div className="col-span-12 md:col-span-5 p-4 border-b border-rose-200/40">
-                        <Field label="Shipping Address">
-                            <div className="relative">
-                                <Truck size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input className={`${inputCls} pl-9`} placeholder="Same as billing or other..." />
-                            </div>
-                        </Field>
-                    </div>
-                    <div className="col-span-12 md:col-span-3 p-4 border-b border-rose-200/40 bg-slate-50/30">
-                        <Field label="Shipping State">
-                            <input className={inputCls} placeholder="Maharashtra" />
-                        </Field>
-                    </div>
-                </div>
-
-                <div className="p-5 bg-slate-50/60 border-t border-slate-200">
-                    <Field label="Narration / Return Notes">
-                        <textarea
-                            className="w-full bg-white border border-rose-200 rounded-xl px-4 py-3 h-20 focus:ring-2 focus:ring-rose-200 focus:border-rose-300 outline-none text-slate-600 text-[12px] resize-none transition-all"
-                            placeholder="Enter any additional notes..."
-                            value={narration} onChange={e => setNarration(e.target.value)}
-                        />
-                    </Field>
-                </div>
-
-                {/* ── ACTION BAR ───────────────────────────────────── */}
-                <div
-                    className="flex items-center gap-2.5 text-white px-5 py-3.5 border-t flex-wrap"
-                    style={{ background: 'linear-gradient(90deg, #1c0a0a 0%, #3b0d0d 50%, #1c0a0a 100%)', borderColor: '#3b0d0d' }}
-                >
-                    {/* Submit Return */}
-                    <button
-                        onClick={submitReturn}
-                        disabled={isSubmittingReturn || !isReturnActive}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10.5px] uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                        style={{ background: isReturnActive ? 'linear-gradient(180deg, #e11d48 0%, #be123c 100%)' : '#4b1c1c', boxShadow: isReturnActive ? '0 4px 14px rgba(225,29,72,0.4)' : 'none' }}
-                    >
-                        <Save size={15} strokeWidth={2.5} />
-                        {isSubmittingReturn ? 'Submitting...' : 'Submit Return'}
-                    </button>
-
-                    {/* Print */}
-                    <button className="flex items-center gap-2 bg-rose-900/40 hover:bg-rose-800 px-4 py-2.5 rounded-xl font-bold text-[10.5px] uppercase tracking-wider border border-rose-700/50 transition-all">
-                        <Printer size={15} className="text-rose-400" />
-                        Save & Print
-                    </button>
-
-                    {/* Email */}
-                    <button className="flex items-center gap-2 bg-rose-900/40 hover:bg-rose-800 px-4 py-2.5 rounded-xl font-bold text-[10.5px] uppercase tracking-wider border border-rose-700/50 transition-all">
-                        <Mail size={15} className="text-rose-400" />
-                        Email
-                    </button>
-
-                    <div className="h-5 w-px bg-rose-900 mx-1" />
-
-                    {/* e-Invoice */}
-                    <button className="flex items-center gap-2 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10.5px] uppercase tracking-widest border border-indigo-500/25 transition-all">
-                        <Send size={15} />
-                        e-Invoice
-                    </button>
-
-                    {/* e-Way Bill */}
-                    <button className="flex items-center gap-2 bg-orange-600/10 hover:bg-orange-600 text-orange-400 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10.5px] uppercase tracking-widest border border-orange-500/25 transition-all">
-                        <Truck size={15} />
-                        e-Way Bill
-                    </button>
-
-                    {/* Cancel */}
-                    <button className="flex items-center gap-2 text-rose-700/60 hover:text-red-400 hover:bg-red-500/10 px-4 py-2.5 rounded-xl font-bold text-[10.5px] uppercase tracking-wider ml-auto transition-all group">
-                        <XCircle size={15} className="group-hover:rotate-90 transition-transform duration-300" />
-                        Cancel
-                    </button>
-                </div>
+              <StatCard
+                title={isReturnActive ? 'Return financials' : 'Invoice totals'}
+                boxCls={isReturnActive ? 'border-rose-100 bg-rose-50/30' : 'border-blue-100 bg-blue-50/20'}
+                bar={isReturnActive ? 'bg-rose-400' : 'bg-blue-400'}
+                text={isReturnActive ? 'text-rose-600' : 'text-blue-600'}
+              >
+                <StatRow label="Total gross" value={`₹ ${fmtINR(isReturnActive ? returnTotals.gross : totals.totalGross)}`} tone="text-slate-900" />
+                <StatRow label="Total disc" value={`−₹ ${fmtINR(isReturnActive ? returnTotals.disc : totals.totalDisc)}`} tone="text-green-700" />
+                <StatRow label="Taxable amt" value={`₹ ${fmtINR(isReturnActive ? returnTotals.taxable : totals.totalTaxable)}`} tone="text-slate-700" />
+                <StatRow label="Total GST" value={`+₹ ${fmtINR(isReturnActive ? returnTotals.gst : totals.totalGST)}`} tone={isReturnActive ? 'text-rose-600' : 'text-blue-600'} />
+              </StatCard>
             </div>
 
-            {showPaymentModal && (
-                <MultiTransaction
-                    totals={isReturnActive ? { invoiceTotal: returnTotals.taxable + returnTotals.gst } : totals}
-                />
-            )}
-        </div>
-    );
+            {/* Grand total / refund bar */}
+            <button
+              type="button"
+              onClick={openPayment}
+              className="group relative w-full overflow-hidden rounded-2xl p-7 text-left text-white shadow-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-rose-400/40 active:translate-y-0 active:scale-[0.995]"
+              style={{
+                background: isReturnActive
+                  ? 'linear-gradient(135deg, #881337 0%, #be123c 50%, #9f1239 100%)'
+                  : 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)',
+                boxShadow: isReturnActive ? '0 20px 40px -15px rgba(136,19,55,0.45)' : '0 20px 40px -15px rgba(6,78,59,0.45)'
+              }}
+            >
+              <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+              <span className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
+              <span className="pointer-events-none absolute -bottom-10 -left-4 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+              <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-all duration-700 group-hover:left-full group-hover:opacity-100" />
+
+              <div className="relative flex flex-wrap items-center justify-between gap-5">
+                <div className="flex items-center gap-4">
+                  <span className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm transition-colors group-hover:bg-white/20">
+                    {isReturnActive ? <RotateCcw size={32} /> : <CreditCard size={32} />}
+                  </span>
+                  <div>
+                    <p className="text-[12px] font-black uppercase tracking-[0.28em] text-white/80">
+                      {isReturnActive ? 'Total refund / credit amount' : 'Invoice payable amount'}
+                    </p>
+                    <p className="mt-1 text-[11.5px] font-medium text-white/55">
+                      {isReturnActive ? 'Click to process credit note' : 'Click to proceed with payment'}
+                    </p>
+                    <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-1.5 text-[12.5px] font-semibold backdrop-blur-sm transition-all group-hover:bg-white/20">
+                      {isReturnActive ? 'Process credit note' : 'Receive payment'}
+                      <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
+                    </span>
+                  </div>
+                </div>
+
+                <p className="flex items-end gap-0.5 tabular-nums">
+                  <span className="mb-1.5 text-2xl font-light text-white/70">₹</span>
+                  <span className="text-6xl font-black tracking-tight">{payableParts.int}</span>
+                  <span className="mb-1.5 text-2xl font-black opacity-70">.{payableParts.dec}</span>
+                </p>
+              </div>
+            </button>
+          </div>
+        </Section>
+
+        {/* ── CREDIT NOTE ADJUSTMENT TABLE ─────────────────── */}
+        {isReturnActive && (
+          <Section
+            icon={FileText}
+            title="Credit note summary"
+            subtitle="Adjustment ledger for returned stock"
+            tone="rose"
+            bodyClass="bg-slate-50/40"
+            action={
+              <div className="flex items-center gap-2 rounded-xl border border-rose-100 bg-white px-3 py-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
+                <span className="text-[12px] font-semibold text-rose-700">
+                  {adjustmentList.length} reversal {adjustmentList.length === 1 ? 'line' : 'lines'}
+                </span>
+              </div>
+            }
+          >
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80 text-[12px] font-semibold text-slate-500">
+                      <th className="w-16 px-5 py-3 text-center">#</th>
+                      <th className="px-5 py-3 text-left">Particulars</th>
+                      <th className="px-5 py-3 text-center">Qty</th>
+                      <th className="px-5 py-3 text-right">Taxable value</th>
+                      <th className="px-5 py-3 text-right text-rose-500">GST credit</th>
+                      <th className="w-40 px-5 py-3 text-right">
+                        <span className="rounded-full bg-rose-600 px-3 py-1 text-[11px] font-semibold text-white">Sub-total</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {adjustmentList.map((entry, i) => (
+                      <tr key={entry.id} className="transition-colors hover:bg-rose-50/30">
+                        <td className="px-5 py-2.5 text-center font-mono text-[11px] text-slate-400">{String(i + 1).padStart(2, '0')}</td>
+                        <td className="px-5 py-2.5">
+                          <div className="text-[13px] font-semibold text-slate-700">{entry.itemName}</div>
+                          <div className="mt-0.5 text-[11px] text-slate-400">Batch: {entry.batch || 'N/A'}</div>
+                        </td>
+                        <td className="px-5 py-2.5 text-center">
+                          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg border border-rose-100 bg-rose-50 text-[12px] font-black text-rose-700">
+                            {entry.returnQty}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-mono text-[12px] text-slate-600">₹{fmtINR(entry.ret.taxable)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-[12px] font-semibold text-rose-600">+₹{fmtINR(entry.ret.tax)}</td>
+                        <td className="px-5 py-2.5 text-right text-[13px] font-bold text-slate-800">₹{fmtINR(entry.ret.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-100">
+                    <tr className="bg-rose-50/40">
+                      <td colSpan={5} className="px-5 py-3 text-right text-[12px] font-semibold text-rose-900/70">Net credit value</td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="text-base font-black text-rose-700">₹{fmtINR(returnTotals.total)}</span>
+                          <div className="mt-0.5 h-0.5 w-10 rounded-full bg-rose-600" />
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {/* ── RETURN REASON ────────────────────────────────── */}
+        <Section icon={RotateCcw} title="Return reason & remarks" subtitle="Saved with the credit note" tone="rose" bodyClass="bg-white">
+          <div className="grid grid-cols-12 gap-4">
+            <Field label="Reason code" htmlFor="reasonCode" className="col-span-12 sm:col-span-6 lg:col-span-3">
+              <div className="relative">
+                <select
+                  id="reasonCode"
+                  className={`${inputCls} cursor-pointer appearance-none pr-9`}
+                  value={returnReasonCode}
+                  onChange={e => setReturnReasonCode(e.target.value)}
+                >
+                  <option value="DEFECT">Defect</option>
+                  <option value="DAMAGE">Damage</option>
+                  <option value="EXPIRY">Expiry</option>
+                  <option value="QUALITY">Quality Issue</option>
+                  <option value="EXCESS">Excess Stock</option>
+                  <option value="WRONG_ITEM">Wrong Item</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-400" />
+              </div>
+            </Field>
+
+            <Field label="Reason description" htmlFor="reasonText" className="col-span-12 sm:col-span-6 lg:col-span-4">
+              <input id="reasonText" className={inputCls} placeholder="Detailed reason for return..." value={returnReasonText} onChange={e => setReturnReasonText(e.target.value)} />
+            </Field>
+
+            <Field label="Remarks" htmlFor="returnRemarks" className="col-span-12 lg:col-span-5">
+              <input id="returnRemarks" className={inputCls} placeholder="Additional remarks..." value={returnRemarks} onChange={e => setReturnRemarks(e.target.value)} />
+            </Field>
+          </div>
+        </Section>
+
+        {/* ── RETURN HISTORY ───────────────────────────────── */}
+        {returnHistory && returnHistory.length > 0 && (
+          <Section
+            icon={History}
+            title="Return history"
+            subtitle="Earlier returns against this invoice"
+            tone="blue"
+            bodyClass="bg-blue-50/20"
+            action={isLoadingReturns && <span className="animate-pulse text-[12px] text-slate-400">Loading…</span>}
+          >
+            <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+              {returnHistory.map((ret, i) => (
+                <div key={ret.returnNo ?? i} className="flex items-start justify-between gap-3 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
+                  <div>
+                    <span className="text-[12.5px] font-bold text-slate-700">{ret.returnNo}</span>
+                    <span className="ml-2 text-[11px] text-slate-400">{ret.returnDate}</span>
+                    {ret.reasonText && <p className="mt-0.5 text-[12px] text-slate-500">{ret.reasonText}</p>}
+                  </div>
+                  <span className="shrink-0 rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">{ret.reasonCode}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── SHIPPING ─────────────────────────────────────── */}
+        <Section icon={Truck} title="Shipping details" subtitle="Optional" tone="rose" bodyClass="bg-white">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Contact person" htmlFor="contactPerson">
+              <IconInput id="contactPerson" icon={User} placeholder="In-charge name" />
+            </Field>
+            <Field label="Shipping address" htmlFor="shipAddress" className="lg:col-span-2">
+              <IconInput id="shipAddress" icon={MapPin} placeholder="Same as billing or other..." />
+            </Field>
+            <Field label="Shipping state" htmlFor="shipState">
+              <input id="shipState" className={`${inputCls} !bg-slate-50`} placeholder="Maharashtra" />
+            </Field>
+          </div>
+        </Section>
+
+        {/* ── NARRATION ────────────────────────────────────── */}
+        <Section icon={FileText} title="Narration / return notes" subtitle="Printed as remarks on the credit note" tone="slate" bodyClass="bg-slate-50/60">
+          <textarea
+            id="narration"
+            aria-label="Narration or return notes"
+            className="h-24 w-full resize-none rounded-xl border border-rose-200 bg-white px-4 py-3 text-[13px] text-slate-600 shadow-sm outline-none transition-all duration-150 placeholder:text-slate-300 hover:border-rose-300 focus:border-rose-300 focus:ring-4 focus:ring-rose-200/60"
+            placeholder="Enter any additional notes..."
+            value={narration}
+            onChange={e => setNarration(e.target.value)}
+          />
+        </Section>
+
+        {/* ── ACTION BAR (sticks to bottom of viewport) ────── */}
+        <footer
+          className="sticky bottom-0 z-30 flex flex-wrap items-center gap-2.5 rounded-b-3xl border-t px-6 py-3.5 text-white shadow-[0_-10px_30px_-10px_rgba(28,10,10,0.5)] backdrop-blur"
+          style={{ background: 'linear-gradient(90deg, rgba(28,10,10,0.97) 0%, rgba(59,13,13,0.97) 50%, rgba(28,10,10,0.97) 100%)', borderColor: '#3b0d0d' }}
+        >
+          <button type="button" onClick={submitReturn} disabled={isSubmittingReturn || !isReturnActive} className={btn.primary}>
+            {isSubmittingReturn
+              ? <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+              : <><Save size={16} strokeWidth={2.5} /> Submit return</>}
+          </button>
+
+          <button type="button" className={btn.secondary}>
+            <Printer size={16} className="text-rose-300 transition-colors group-hover:text-white" />
+            Save & print
+          </button>
+
+          <button type="button" className={btn.secondary}>
+            <Mail size={16} className="text-rose-300 transition-colors group-hover:text-white" />
+            Email
+          </button>
+
+          <div className="mx-1 hidden h-6 w-px bg-rose-900 sm:block" />
+
+          <button type="button" className={btn.indigo}>
+            <Send size={16} className="transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            e-Invoice
+          </button>
+
+          <button type="button" className={btn.orange}>
+            <Truck size={16} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+            e-Way bill
+          </button>
+
+          <button type="button" className={`${btn.ghostDanger} ml-auto`}>
+            <XCircle size={16} className="transition-transform duration-300 group-hover:rotate-90" />
+            Cancel
+          </button>
+        </footer>
+      </div>
+
+      {showPaymentModal && (
+        <MultiTransaction
+          totals={isReturnActive ? { invoiceTotal: returnTotals.total } : totals}
+        />
+      )}
+    </div>
+  );
 };
 
 export default BillingReturnV4;

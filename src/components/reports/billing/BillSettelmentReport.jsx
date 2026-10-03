@@ -2,15 +2,19 @@ import React, { useState, useEffect } from "react";
 import {
   Search,
   RotateCcw,
+  RefreshCw,
   FileSpreadsheet,
   FileText,
   Printer,
   ChevronLeft,
   ChevronRight,
-  CheckCircle,
-  Clock,
-  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  XCircle,
   Wallet,
+  BadgeIndianRupee,
+  ReceiptText,
+  PiggyBank,
 } from "lucide-react";
 
 import { useToast } from "../../contextapi/ToastContext";
@@ -24,70 +28,103 @@ const INITIAL_FILTERS = {
   fromDate: getTodayISO(),
   toDate: getTodayISO(),
   status: "All",
+  paymentMode: "All",
 };
 
 const INITIAL_SUMMARY = {
-  totalBillAmount: 0,
-  totalPaidAmount: 0,
-  totalSettlementAmount: 0,
-  totalPendingAmount: 0,
+  totalGross: 0,
+  totalDiscount: 0,
+  totalGst: 0,
+  totalNet: 0,
 };
 
 /* ── helpers ── */
 const inr = (n) =>
-  "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  "\u20B9" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-/* ── status config ──
-   Backend's actual billStatus values: Paid, Partially Paid, Pending.
-   Note: /api/invoice/settlements/report has no `status` query param yet —
-   this dropdown is UI-only for now and filters nothing server-side. */
-const STATUS_CONFIG = {
-  Paid: {
-    icon: <CheckCircle className="w-3 h-3" />,
-    cls: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  },
-  "Partially Paid": {
-    icon: <Clock className="w-3 h-3" />,
-    cls: "bg-amber-50 text-amber-700 border border-amber-200",
-  },
-  Pending: {
-    icon: <AlertCircle className="w-3 h-3" />,
-    cls: "bg-rose-50 text-rose-700 border border-rose-200",
-  },
+const formatDate = (d) => {
+  if (!d) return "—";
+  try {
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return d;
+  }
 };
 
-const DEFAULT_STATUS_STYLE = {
-  icon: <Clock className="w-3 h-3" />,
-  cls: "bg-slate-50 text-slate-500 border border-slate-200",
+/* ── status config (compact badges) ── */
+const STATUS_CONFIG = {
+  Paid: {
+    icon: <CheckCircle2 className="w-3 h-3" />,
+    dot: "bg-emerald-500",
+    cls: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+  },
+  Pending: {
+    icon: <Clock3 className="w-3 h-3" />,
+    dot: "bg-amber-500",
+    cls: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+  },
+  Cancelled: {
+    icon: <XCircle className="w-3 h-3" />,
+    dot: "bg-rose-500",
+    cls: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
+  },
 };
 
 /* ══════════════════════════════════════════════
-   SUMMARY CARD
+   SUMMARY CARD — compact, top-border accent
 ══════════════════════════════════════════════ */
-function SummaryCard({ label, value, colorClass }) {
+function SummaryCard({ label, value, count, icon, accent }) {
+  const ACCENTS = {
+    blue: { border: "#2563EB", bg: "#EFF6FF", icon: "#2563EB" },
+    green: { border: "#059669", bg: "#ECFDF5", icon: "#059669" },
+    orange: { border: "#D97706", bg: "#FFFBEB", icon: "#D97706" },
+    red: { border: "#DC2626", bg: "#FEF2F2", icon: "#DC2626" },
+  };
+  const a = ACCENTS[accent] || ACCENTS.blue;
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-1">
-        {label}
-      </p>
-      <p className={`text-xl font-bold ${colorClass}`}>{value}</p>
+    <div
+      className="group bg-white rounded-[12px] border border-[#E2E8F0] px-4 py-3 flex items-center gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:-translate-y-[1px] transition-all duration-150"
+      style={{ borderTop: `3px solid ${a.border}` }}
+    >
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-transform duration-150 group-hover:scale-105"
+        style={{ backgroundColor: a.bg, color: a.icon }}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider leading-none mb-1.5 truncate">
+          {label}
+        </p>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[18px] font-bold text-[#0F172A] leading-none tabular-nums">
+            {value}
+          </span>
+          {count !== undefined && (
+            <span className="text-[10.5px] font-medium text-[#94A3B8] leading-none">
+              · {count} bills
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════
    MAIN COMPONENT
-   Single source of truth: GET /api/invoice/settlements/report
-   — table rows (`entries`), summary cards (`totals`), and
-   pagination all come from this one response. No other bill
-   settlement endpoint is called.
-
-   IMPORTANT: the backend controller declares this endpoint's
-   date params as `startDate` / `endDate` (not fromDate/toDate),
-   and has no `status` param at all — so status filtering is
-   currently client-facing only and is NOT sent to the API.
+   Single source of truth: GET /api/reports/billing/paginated
+   — table rows, summary cards, and pagination all come from
+   this one response. No other billing report endpoint is called.
 ══════════════════════════════════════════════ */
-export default function BillSettlementReport() {
+export default function BillingReport() {
   const { error, info } = useToast();
   const { exportExcel, exportPDF, printTable } = useExport();
 
@@ -97,54 +134,58 @@ export default function BillSettlementReport() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
 
-  const [settlementData, setSettlementData] = useState([]);
+  const [billingData, setBillingData] = useState([]);
   const [summary, setSummary] = useState(INITIAL_SUMMARY);
   const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   /* ── single API call: drives table + summary + pagination ── */
-  const fetchSettlementReport = async () => {
+  const fetchBillingReport = async () => {
     try {
       setLoading(true);
 
       const params = new URLSearchParams({
-        startDate: appliedFilters.fromDate,
-        endDate: appliedFilters.toDate,
+        fromDate: appliedFilters.fromDate,
+        toDate: appliedFilters.toDate,
+        status: appliedFilters.status,
+        paymentMode: appliedFilters.paymentMode,
         page: currentPage - 1, // backend pages are 0-indexed
         size: ITEMS_PER_PAGE,
       });
 
       const response = await fetch(
-        `http://localhost:8081/api/invoice/settlements/report?${params.toString()}`,
+        `http://localhost:8081/api/reports/billing/paginated?${params.toString()}`,
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch bill settlement report");
+        throw new Error("Failed to fetch billing report");
       }
 
       const result = await response.json();
-      const totals = result.totals || {};
+      const page = result.invoicesPage || {};
 
       // Table rows
-      setSettlementData(result.entries || []);
+      setBillingData(page.content || []);
 
       // Summary cards
       setSummary({
-        totalBillAmount: totals.totalBillAmount || 0,
-        totalPaidAmount: totals.totalPaidAmount || 0,
-        totalSettlementAmount: totals.totalSettlementAmount || 0,
-        totalPendingAmount: totals.totalPendingAmount || 0,
+        totalGross: result.totalGross || 0,
+        totalDiscount: result.totalDiscount || 0,
+        totalGst: result.totalGst || 0,
+        totalNet: result.totalNet || 0,
       });
 
       // Pagination — synced with backend's own page state
-      setTotalPages(Math.max(1, result.totalPages || 1));
-      setTotalRecords(result.totalElements || 0);
-      if (typeof result.pageNumber === "number") {
-        setCurrentPage(result.pageNumber + 1); // back to 1-indexed for the UI
+      setTotalPages(Math.max(1, page.totalPages || 1));
+      setTotalRecords(page.totalElements || 0);
+      if (typeof page.pageNumber === "number") {
+        setCurrentPage(page.pageNumber + 1); // back to 1-indexed for the UI
       }
+      setLastUpdated(new Date());
     } catch (err) {
       console.error(err);
-      error("Unable to load bill settlement report");
-      setSettlementData([]);
+      error("Unable to load billing report");
+      setBillingData([]);
       setSummary(INITIAL_SUMMARY);
       setTotalPages(1);
       setTotalRecords(0);
@@ -154,9 +195,9 @@ export default function BillSettlementReport() {
   };
 
   // Every trigger — initial load, Search, filter change, page change —
-  // funnels through this one effect, which calls the one report API.
+  // funnels through this one effect, which calls the one paginated API.
   useEffect(() => {
-    fetchSettlementReport();
+    fetchBillingReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedFilters, currentPage]);
 
@@ -176,33 +217,35 @@ export default function BillSettlementReport() {
     setAppliedFilters(INITIAL_FILTERS);
   };
 
+  // Re-runs the current query without changing filters or page.
+  const handleRefresh = () => {
+    fetchBillingReport();
+  };
+
   const handleExport = (type) => {
-    if (settlementData.length === 0) {
+    if (billingData.length === 0) {
       error("No data available to export.");
       return;
     }
     const config = {
-      fileName: `Bill_Settlement_Report_${appliedFilters.fromDate}_to_${appliedFilters.toDate}`,
-      title: "Bill Settlement Report",
+      fileName: `Billing_Report_${appliedFilters.fromDate}_to_${appliedFilters.toDate}`,
+      title: "Billing Report",
       columns: [
-        { key: "settlementId", header: "Settlement ID" },
-        { key: "settlementDate", header: "Date" },
-        { key: "customerName", header: "Customer Name" },
-        { key: "city", header: "City" },
-        { key: "mobileNo", header: "Mobile No" },
         { key: "invoiceNo", header: "Invoice No" },
         { key: "invoiceDate", header: "Invoice Date" },
-        { key: "billAmount", header: "Bill Amt" },
-        { key: "discountAmount", header: "Disc. Amt" },
-        { key: "finalAmount", header: "Final Amt" },
-        { key: "paidAmount", header: "Paid Amt" },
-        { key: "pendingAmount", header: "Pending Amt" },
-        { key: "settlementAmount", header: "Settlement Amt" },
-        { key: "currentPending", header: "Current Pending" },
-        { key: "deliveryDate", header: "Delivery Date" },
-        { key: "billStatus", header: "Bill Status" },
+        { key: "customerName", header: "Customer Name" },
+        { key: "totalGrossAmount", header: "Gross Amount" },
+        { key: "totalDiscount", header: "Discount" },
+        { key: "totalCgst", header: "CGST" },
+        { key: "totalSgst", header: "SGST" },
+        { key: "totalIgst", header: "IGST" },
+        { key: "finalAmount", header: "Net Amount" },
+        { key: "balanceStatus", header: "Payment Status" },
       ],
-      rows: settlementData,
+      rows: billingData.map((row) => ({
+        ...row,
+        balanceStatus: row.balance?.status,
+      })),
     };
     if (type === "excel") exportExcel(config);
     else if (type === "pdf") exportPDF(config);
@@ -212,167 +255,208 @@ export default function BillSettlementReport() {
     }
   };
 
-  /* ── shared input class ── */
+  /* ── shared control classes (compact toolbar) ── */
   const inputCls =
-    "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all appearance-none";
+    "h-9 rounded-[8px] border border-[#E2E8F0] bg-white px-2.5 text-[13px] text-[#0F172A] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15 transition-colors appearance-none";
+
+  const btnBase =
+    "h-9 px-3.5 rounded-[8px] text-[12.5px] font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+  const btnPrimary = `${btnBase} bg-[#2563EB] text-white hover:bg-[#1D4ED8]`;
+  const btnGhost = `${btnBase} bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]`;
+
+  const periodLabel =
+    appliedFilters.fromDate === appliedFilters.toDate
+      ? formatDate(appliedFilters.fromDate)
+      : `${formatDate(appliedFilters.fromDate)} – ${formatDate(appliedFilters.toDate)}`;
+
+  const startRow = totalRecords > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
+  const endRow = Math.min(currentPage * ITEMS_PER_PAGE, totalRecords);
 
   /* ══════════════════════════════════════════
      RENDER
   ══════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* ── HEADER ── */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Wallet className="w-5 h-5 text-blue-600" />
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0F172A]">
+      {/* ── HEADER: title + period + export, one row ── */}
+      <div className="bg-white border-b border-[#E2E8F0] px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-[8px] bg-[#EFF6FF] flex items-center justify-center">
+            <ReceiptText className="w-4 h-4 text-[#2563EB]" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">
-              Bill Settlement Report
-            </h1>
-            <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest">
-              Main Billing Counter
-            </p>
+            <div className="flex items-baseline gap-2.5">
+              <h1 className="text-[15px] font-bold text-[#0F172A] leading-none">
+                Bill Settlement Report
+              </h1>
+              <span className="text-[11.5px] text-[#64748B] font-medium leading-none">
+                {periodLabel}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="relative flex h-1.5 w-1.5">
+                {!loading && (
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                )}
+                <span
+                  className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+                    loading ? "bg-amber-400" : "bg-emerald-500"
+                  }`}
+                />
+              </span>
+              <span className="text-[10.5px] text-[#94A3B8] font-medium leading-none">
+                {loading
+                  ? "Refreshing…"
+                  : lastUpdated
+                  ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "Not loaded yet"}
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={() => handleExport("excel")}
-            className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 transition-all"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Excel
+          <button onClick={() => handleExport("excel")} className={btnGhost}>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Excel
           </button>
-          <button
-            onClick={() => handleExport("pdf")}
-            className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 transition-all"
-          >
-            <FileText className="w-4 h-4 text-rose-500" /> PDF
+          <button onClick={() => handleExport("pdf")} className={btnGhost}>
+            <FileText className="w-3.5 h-3.5 text-rose-600" /> PDF
           </button>
-          <button
-            onClick={() => handleExport("print")}
-            className="h-9 px-4 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 flex items-center gap-1.5 transition-all"
-          >
-            <Printer className="w-4 h-4" /> Print
+          <button onClick={() => handleExport("print")} className={`${btnPrimary} shadow-sm active:scale-95`}>
+            <Printer className="w-3.5 h-3.5" /> Print
           </button>
         </div>
       </div>
 
-      {/* ── SUMMARY CARDS ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-6 py-4">
+      {/* ── SUMMARY CARDS: compact, colored top border ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 pt-4">
         <SummaryCard
-          label="Total Bill Amt"
-          value={inr(summary.totalBillAmount)}
-          colorClass="text-slate-800"
+          label="Total Bill Amount"
+          value={inr(summary.totalGross)}
+          icon={<BadgeIndianRupee className="w-4 h-4" />}
+          accent="blue"
         />
         <SummaryCard
-          label="Total Paid Amt"
-          value={inr(summary.totalPaidAmount)}
-          colorClass="text-emerald-600"
+          label="Total GST Collected"
+          value={inr(summary.totalGst)}
+          icon={<PiggyBank className="w-4 h-4" />}
+          accent="orange"
         />
         <SummaryCard
-          label="Total Settlement Amt"
-          value={inr(summary.totalSettlementAmount)}
-          colorClass="text-blue-600"
+          label="Total Discount"
+          value={inr(summary.totalDiscount)}
+          icon={<Wallet className="w-4 h-4" />}
+          accent="red"
         />
         <SummaryCard
-          label="Current Pending"
-          value={inr(summary.totalPendingAmount)}
-          colorClass="text-rose-600"
+          label="Total Net Settlement"
+          value={inr(summary.totalNet)}
+          count={totalRecords}
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          accent="green"
         />
       </div>
 
-      {/* ── FILTERS ── */}
-      <div className="mx-6 mb-4 bg-white rounded-xl border border-slate-200 p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
-              From Date
+      {/* ── FILTER TOOLBAR: single compact row ── */}
+      <div className="mx-5 mt-3 bg-white rounded-[10px] border border-[#E2E8F0] px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-end gap-2.5">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">
+              From
             </label>
             <input
               type="date"
               value={filters.fromDate}
               onChange={(e) => handleFilterChange("fromDate", e.target.value)}
-              className={inputCls}
+              className={`${inputCls} w-[140px]`}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
-              To Date
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">
+              To
             </label>
             <input
               type="date"
               value={filters.toDate}
               onChange={(e) => handleFilterChange("toDate", e.target.value)}
-              className={inputCls}
+              className={`${inputCls} w-[140px]`}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">
               Bill Status
             </label>
             <select
               value={filters.status}
               onChange={(e) => handleFilterChange("status", e.target.value)}
-              className={inputCls}
+              className={`${inputCls} w-[130px]`}
             >
               <option value="All">All Statuses</option>
-              <option value="Paid">Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-              <option value="Pending">Pending</option>
+              <option>Paid</option>
+              <option>Pending</option>
+              <option>Cancelled</option>
             </select>
           </div>
-        </div>
 
-        <div className="flex gap-2 mt-4 justify-end">
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2 transition-all active:scale-95 shadow-sm disabled:opacity-60"
-          >
-            <Search className="w-4 h-4" /> Search
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={loading}
-            className="h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
-          >
-            <RotateCcw className="w-4 h-4" /> Reset
-          </button>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">
+              Payment Mode
+            </label>
+            <select
+              value={filters.paymentMode}
+              onChange={(e) => handleFilterChange("paymentMode", e.target.value)}
+              className={`${inputCls} w-[130px]`}
+            >
+              <option value="All">All Modes</option>
+              <option>Cash</option>
+              <option>UPI</option>
+              <option>Card</option>
+              <option>Bank Transfer</option>
+            </select>
+          </div>
+
+          <div className="flex-1" />
+
+          <div className="flex gap-2">
+            <button onClick={handleSearch} disabled={loading} className={btnPrimary}>
+              <Search className="w-3.5 h-3.5" /> Search
+            </button>
+            <button onClick={handleReset} disabled={loading} className={btnGhost}>
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </button>
+            <button onClick={handleRefresh} disabled={loading} className={btnGhost}>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── TABLE ── */}
-      <div className="mx-6 mb-6 bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table
-            className="w-full text-left border-collapse"
-            style={{ minWidth: "1900px" }}
-          >
-            <thead>
-              <tr className="bg-slate-800 text-white">
+      {/* ── TABLE: primary focus, dense + sticky header ── */}
+      <div className="mx-5 mt-3 mb-5 bg-white rounded-[10px] border border-[#E2E8F0] overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+        <div className="overflow-x-auto max-h-[64vh]">
+          <table className="w-full text-left border-collapse" style={{ minWidth: "1150px" }}>
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-[#0F172A]">
                 {[
-                  ["Settlement ID", "text-left"],
-                  ["Date", "text-left"],
-                  ["Customer Name", "text-left"],
-                  ["City", "text-left"],
-                  ["Mobile No", "text-left"],
                   ["Invoice No", "text-left"],
-                  ["Invoice Date", "text-left"],
-                  ["Bill Amt", "text-right"],
-                  ["Disc. Amt", "text-right"],
-                  ["Final Amt", "text-right"],
-                  ["Paid Amt", "text-right"],
-                  ["Pending Amt", "text-right"],
-                  ["Settlement Amt", "text-right"],
-                  ["Current Pending", "text-right"],
-                  ["Delivery Date", "text-left"],
-                  ["Bill Status", "text-center"],
+                  ["Invoice Date", "text-center"],
+                  ["Customer Name", "text-left"],
+                  ["Gross Amount", "text-right"],
+                  ["Discount", "text-right"],
+                  ["CGST", "text-right"],
+                  ["SGST", "text-right"],
+                  ["IGST", "text-right"],
+                  ["Net Amount", "text-right"],
+                  ["Payment Status", "text-center"],
                 ].map(([label, align]) => (
                   <th
                     key={label}
-                    className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap ${align}`}
+                    className={`px-3.5 py-2.5 text-[10.5px] font-semibold text-white/90 uppercase tracking-wider ${align}`}
                   >
                     {label}
                   </th>
@@ -380,110 +464,84 @@ export default function BillSettlementReport() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {loading ? (
-                <tr>
-                  <td
-                    colSpan={16}
-                    className="px-6 py-16 text-center text-slate-400 text-sm"
-                  >
-                    Loading bill settlement report…
-                  </td>
-                </tr>
-              ) : settlementData.length > 0 ? (
-                settlementData.map((row) => {
-                  const status = row.billStatus || "Pending";
-                  const sc = STATUS_CONFIG[status] || DEFAULT_STATUS_STYLE;
+                Array.from({ length: 6 }, (_, i) => (
+                  <tr key={`skeleton-${i}`} className="border-b border-[#EDF1F5]">
+                    {Array.from({ length: 10 }, (_, j) => (
+                      <td key={j} className="px-3.5 py-3">
+                        <div
+                          className="h-3 rounded-full bg-[#EDF1F5] animate-pulse"
+                          style={{ width: j === 2 ? "80%" : j === 9 ? "60px" : "70%" }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : billingData.length > 0 ? (
+                billingData.map((row, idx) => {
+                  const status = row.balance?.status || "Pending";
+                  const sc = STATUS_CONFIG[status] || STATUS_CONFIG.Pending;
                   return (
                     <tr
-                      key={row.settlementId || row.id}
-                      className="hover:bg-blue-50/40 transition-colors"
+                      key={row.invoiceNo || row.id}
+                      className={`border-b border-[#EDF1F5] transition-colors hover:bg-[#EFF6FF]/70 hover:shadow-[inset_2px_0_0_#2563EB] ${
+                        idx % 2 === 1 ? "bg-[#FAFBFC]" : "bg-white"
+                      }`}
                     >
-                      {/* Settlement ID */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                          {row.settlementId}
+                      {/* Invoice No */}
+                      <td className="px-3.5 py-2 whitespace-nowrap">
+                        <span className="text-[11.5px] font-semibold text-[#334155] bg-[#F1F5F9] px-1.5 py-0.5 rounded-[4px]">
+                          {row.invoiceNo}
                         </span>
                       </td>
 
-                      {/* Date */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.settlementDate}
+                      {/* Invoice Date */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-[#475569] text-center whitespace-nowrap">
+                        {formatDate(row.invoiceDate)}
                       </td>
 
                       {/* Customer Name */}
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-800 whitespace-nowrap">
+                      <td className="px-3.5 py-2 text-[12.5px] font-semibold text-[#0F172A]">
                         {row.customerName}
                       </td>
 
-                      {/* City */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.city}
+                      {/* Gross Amount */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-right text-[#334155] font-medium tabular-nums">
+                        {inr(row.totalGrossAmount)}
                       </td>
 
-                      {/* Mobile No */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.mobileNo}
+                      {/* Discount */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-right text-[#DC2626] font-medium tabular-nums">
+                        {row.totalDiscount > 0 ? `-${inr(row.totalDiscount)}` : "—"}
                       </td>
 
-                      {/* Invoice No */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.invoiceNo}
+                      {/* CGST */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-right text-[#2563EB] font-medium tabular-nums">
+                        {inr(row.totalCgst)}
                       </td>
 
-                      {/* Invoice Date */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.invoiceDate}
+                      {/* SGST */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-right text-[#2563EB] font-medium tabular-nums">
+                        {inr(row.totalSgst)}
                       </td>
 
-                      {/* Bill Amt */}
-                      <td className="px-4 py-3 text-sm text-right text-slate-700 font-medium tabular-nums whitespace-nowrap">
-                        {inr(row.billAmount)}
+                      {/* IGST */}
+                      <td className="px-3.5 py-2 text-[12.5px] text-right text-[#2563EB] font-medium tabular-nums">
+                        {inr(row.totalIgst)}
                       </td>
 
-                      {/* Disc. Amt */}
-                      <td className="px-4 py-3 text-sm text-right text-rose-500 font-medium tabular-nums whitespace-nowrap">
-                        {row.discountAmount > 0
-                          ? `-${inr(row.discountAmount)}`
-                          : "—"}
-                      </td>
-
-                      {/* Final Amt */}
-                      <td className="px-4 py-3 text-sm text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">
+                      {/* Net / Final Amount */}
+                      <td className="px-3.5 py-2 text-[13px] text-right font-bold text-[#0F172A] tabular-nums">
                         {inr(row.finalAmount)}
                       </td>
 
-                      {/* Paid Amt */}
-                      <td className="px-4 py-3 text-sm text-right text-emerald-600 font-medium tabular-nums whitespace-nowrap">
-                        {inr(row.paidAmount)}
-                      </td>
-
-                      {/* Pending Amt */}
-                      <td className="px-4 py-3 text-sm text-right text-amber-600 font-medium tabular-nums whitespace-nowrap">
-                        {inr(row.pendingAmount)}
-                      </td>
-
-                      {/* Settlement Amt */}
-                      <td className="px-4 py-3 text-sm text-right text-blue-600 font-medium tabular-nums whitespace-nowrap">
-                        {inr(row.settlementAmount)}
-                      </td>
-
-                      {/* Current Pending */}
-                      <td className="px-4 py-3 text-sm text-right text-rose-600 font-semibold tabular-nums whitespace-nowrap">
-                        {inr(row.currentPending)}
-                      </td>
-
-                      {/* Delivery Date */}
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {row.deliveryDate}
-                      </td>
-
-                      {/* Bill Status */}
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                      {/* Payment Status */}
+                      <td className="px-3.5 py-2 text-center">
                         <div
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${sc.cls}`}
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold ${sc.cls}`}
                         >
-                          {sc.icon}
+                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                           {status}
                         </div>
                       </td>
@@ -492,11 +550,18 @@ export default function BillSettlementReport() {
                 })
               ) : (
                 <tr>
-                  <td
-                    colSpan={16}
-                    className="px-6 py-16 text-center text-slate-400 text-sm"
-                  >
-                    No settlements found for the selected filters.
+                  <td colSpan={10} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-[#F1F5F9] flex items-center justify-center">
+                        <ReceiptText className="w-5 h-5 text-[#94A3B8]" />
+                      </div>
+                      <p className="text-[13px] font-semibold text-[#334155]">
+                        No bills found
+                      </p>
+                      <p className="text-[11.5px] text-[#94A3B8]">
+                        Try widening the date range or clearing a filter.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -505,26 +570,20 @@ export default function BillSettlementReport() {
         </div>
 
         {/* ── PAGINATION ── */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-            Showing{" "}
-            <span className="text-slate-700">
-              {totalRecords > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}
-            </span>{" "}
-            –{" "}
-            <span className="text-slate-700">
-              {Math.min(currentPage * ITEMS_PER_PAGE, totalRecords)}
-            </span>{" "}
-            of <span className="text-slate-700">{totalRecords}</span> settlements
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 py-2.5 border-t border-[#E2E8F0] bg-[#F8FAFC]">
+          <span className="text-[11.5px] font-medium text-[#64748B]">
+            Showing <span className="text-[#0F172A] font-semibold">{startRow}</span>–
+            <span className="text-[#0F172A] font-semibold">{endRow}</span> of{" "}
+            <span className="text-[#0F172A] font-semibold">{totalRecords}</span> bills
           </span>
 
           <div className="flex items-center gap-1">
             <button
               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1 || loading}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F1F5F9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
 
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
@@ -532,10 +591,10 @@ export default function BillSettlementReport() {
                 key={p}
                 onClick={() => setCurrentPage(p)}
                 disabled={loading}
-                className={`w-8 h-8 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${
+                className={`w-7 h-7 rounded-[6px] text-[11.5px] font-semibold transition-all disabled:opacity-50 ${
                   currentPage === p
-                    ? "bg-blue-600 text-white"
-                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                    ? "bg-[#2563EB] text-white shadow-[0_2px_5px_rgba(37,99,235,0.35)]"
+                    : "border border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F1F5F9]"
                 }`}
               >
                 {p}
@@ -543,13 +602,11 @@ export default function BillSettlementReport() {
             ))}
 
             <button
-              onClick={() =>
-                setCurrentPage((p) => Math.min(p + 1, totalPages))
-              }
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages || loading}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="w-7 h-7 flex items-center justify-center rounded-[6px] border border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F1F5F9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

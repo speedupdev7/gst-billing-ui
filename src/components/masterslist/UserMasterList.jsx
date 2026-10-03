@@ -1,21 +1,26 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Eye,
-  Edit,
-  Trash2,
   Search,
   FileSpreadsheet,
   FileText,
   Printer,
   Plus,
+  ArrowLeft,
+  Briefcase,
+  Mail,
+  Phone,
+  MapPin,
 } from "lucide-react";
+import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ModeEditIcon from '@mui/icons-material/ModeEdit';
 
 import { useToast } from "../contextapi/ToastContext";
 import { useExport } from "../contextapi/ExportContext";
 import { useActions } from "../contextapi/ActionsContext";
 
-export default function UnitCompanyList() {
+export default function UserMasterList() {
   const navigate = useNavigate();
 
   const { error } = useToast();
@@ -27,6 +32,10 @@ export default function UnitCompanyList() {
   const [onlySelectedExport, setOnlySelectedExport] = useState(false);
   const [perPage] = useState(10);
   const [page, setPage] = useState(1);
+
+  // --- VIEW STATES ---
+  const [viewMode, setViewMode] = useState("list"); // "list" or "details"
+  const [selectedCompany, setSelectedCompany] = useState(null);
 
   /* ---------------- SAMPLE DATA ---------------- */
   const companies = useMemo(
@@ -53,7 +62,7 @@ export default function UnitCompanyList() {
     []
   );
 
-  /* ---------------- FILTER (FIXED) ---------------- */
+  /* ---------------- FILTER ---------------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return companies;
@@ -105,185 +114,346 @@ export default function UnitCompanyList() {
   };
 
   /* ---------------- ACTIONS ---------------- */
-  const handleView = (company) => onView("Company", company);
+  const handleView = (company) => {
+    setSelectedCompany(company);
+    setViewMode("details");
+    if (onView) onView("Company", company);
+  };
   const handleEdit = (company) =>
     onEdit("Company", company.id, () =>
       navigate(`/unit-company?id=${company.id}`)
     );
   const handleDelete = (id) => onDelete("Company", id);
 
-  /* ---------------- RENDER ---------------- */
-  return (
-    <div className="font-poppins bg-white p-6 rounded-xl shadow border">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:justify-between gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-indigo-700">
-          Unit Company List
-        </h1>
-
-        <div className="flex gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search..."
-              className="bg-transparent outline-none text-sm"
-            />
+  /* ---------------- RENDER VIEW: DETAILS PAGE ---------------- */
+  if (viewMode === "details" && selectedCompany) {
+    return (
+      <div className="font-poppins bg-slate-50 min-h-screen p-4 md:p-8">
+        <div className="max-w-5xl mx-auto">
+          {/* Header Controls */}
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => setViewMode("list")}
+              className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition font-semibold"
+            >
+              <ArrowLeft className="w-5 h-5" /> Back to List
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEdit(selectedCompany)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition"
+              >
+                <ModeEditIcon sx={{ fontSize: 18 }} /> Edit Record
+              </button>
+            </div>
           </div>
 
-          <Link
-            to="/user-master"
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-900 text-white rounded-sm text-xs font-semibold transition"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add User
-          </Link>
+          {/* Main Content Card */}
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+            {/* Banner */}
+            <div className="bg-blue-900 p-8 text-white flex items-center gap-6">
+              <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center text-3xl font-black border border-white/30 uppercase">
+                {selectedCompany.unitName?.charAt(0)}
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">{selectedCompany.unitName}</h1>
+                <p className="text-blue-200 flex items-center gap-2 mt-1">
+                  <Briefcase className="w-4 h-4" /> Profile ID: {selectedCompany.id}
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+
+              {/* Main Sections */}
+              <div className="md:col-span-2 space-y-8">
+                <section>
+                  <h3 className="text-indigo-900 font-bold text-lg mb-4 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-indigo-600 rounded-full"></div> Statutory Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">GSTIN Number</p>
+                      <p className="text-base font-mono font-bold text-slate-700">{selectedCompany.gstin || "Not Available"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">PAN Card</p>
+                      <p className="text-base font-mono font-bold text-slate-700">{selectedCompany.pan || "Not Available"}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-indigo-900 font-bold text-lg mb-4 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-indigo-600 rounded-full"></div> Contact & Communication
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-100">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><Phone className="w-5 h-5" /></div>
+                      <div>
+                        <p className="text-xs text-slate-400">Phone Number</p>
+                        <p className="font-bold text-slate-700">{selectedCompany.phone || "-"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-100">
+                      <div className="p-3 bg-amber-50 text-amber-600 rounded-lg"><Mail className="w-5 h-5" /></div>
+                      <div>
+                        <p className="text-xs text-slate-400">Email Address</p>
+                        <p className="font-bold text-indigo-600 underline">{selectedCompany.email || "-"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-indigo-900 font-bold text-lg mb-4 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-indigo-600 rounded-full"></div> Location
+                  </h3>
+                  <div className="flex gap-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <MapPin className="w-6 h-6 text-rose-500 mt-1" />
+                    <p className="text-slate-700 leading-relaxed font-bold">{selectedCompany.city || "-"}</p>
+                  </div>
+                </section>
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-6">
+                <div className="p-6 border border-slate-100 rounded-2xl bg-white">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-tighter">System Info</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Record ID</span>
+                      <span className="text-slate-600 font-medium">{selectedCompany.id}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Data Status</span>
+                      <span className="text-emerald-600 font-bold uppercase">Active</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* EXPORT RIGHT SIDE (UNCHANGED) */}
-      <div className="flex justify-between items-center mb-4 bg-slate-50 p-3 rounded-lg border">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={onlySelectedExport}
-            onChange={(e) => setOnlySelectedExport(e.target.checked)}
-          />
-          Export selected only
-        </label>
+  /* ---------------- RENDER VIEW: MAIN LIST ---------------- */
+  return (
+    <div className="font-poppins bg-slate-50 min-h-screen p-4 md:p-8">
+      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
 
-        <div className="flex gap-3">
-          <button
-            onClick={() =>
-              exportExcel({
-                fileName: "UnitCompanyList",
-                sheetName: "Companies",
-                columns: exportColumns,
-                rows: getRowsForExport(onlySelectedExport),
-              })
-            }
-            className="px-3 py-2 flex items-center gap-2 bg-green-600 text-white rounded-lg text-sm"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Excel
-          </button>
+        {/* --- MAIN PAGE HEADER --- */}
+        <div className="p-6 md:p-8 border-b border-slate-900">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Unit Company List</h1>
+              {/* Divider line for title */}
+              <div className="h-1 w-12 bg-blue-900 mt-2 rounded-full"></div>
+            </div>
 
-          <button
-            onClick={() =>
-              exportPDF({
-                fileName: "UnitCompanyList",
-                title: "Unit Company List",
-                columns: exportColumns,
-                rows: getRowsForExport(onlySelectedExport),
-              })
-            }
-            className="px-3 py-2 flex items-center gap-2 bg-red-600 text-white rounded-lg text-sm"
-          >
-            <FileText className="w-4 h-4" /> PDF
-          </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center">
+                <div className="relative flex-1 sm:flex-initial">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Search by name, GST..."
+                    className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-l-lg text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+                  />
+                </div>
+                <button
+                  className="bg-blue-900 text-white px-4 py-2 rounded-r-lg text-sm font-semibold transition-colors border border-blue-600 shadow-sm flex items-center gap-2"
+                  onClick={() => {/* Your search logic here */ }}
+                >
+                  Search
+                </button>
+              </div>
+              <Link
+                to="/user-master"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-900 text-white rounded-lg text-xs font-semibold hover:bg-blue-800 transition-all shadow-md active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> Add User
+              </Link>
+            </div>
+          </div>
 
-          <button
-            onClick={() =>
-              printTable({
-                title: "Unit Company List",
-                columns: exportColumns,
-                rows: getRowsForExport(onlySelectedExport),
-              })
-            }
-            className="px-3 py-2 flex items-center gap-2 bg-slate-700 text-white rounded-lg text-sm"
-          >
-            <Printer className="w-4 h-4" /> Print
-          </button>
-        </div>
-      </div>
+          {/* Export Bar */}
+          <div className="mt-8 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-end gap-3">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-auto">Export Options</span>
 
-      {/* TABLE (ACTION BUTTON SIZE SAME) */}
-      <table className="w-full text-sm border">
-        <thead className="bg-blue-900 text-white">
-          <tr>
-            <th className="p-3">
+            <span className="text-xs font-semibold text-slate-600">{selectedRows.length} selected</span>
+
+            <label className="flex items-center gap-2 text-xs text-slate-600">
               <input
                 type="checkbox"
-                checked={
-                  pageItems.length &&
-                  pageItems.every((c) => selectedRows.includes(c.id))
-                }
-                onChange={toggleAll}
+                checked={onlySelectedExport}
+                onChange={(e) => setOnlySelectedExport(e.target.checked)}
+                className="w-4 h-4"
               />
-            </th>
-            <th className="p-3 text-left">Company</th>
-            <th className="p-3">GST / PAN</th>
-            <th className="p-3">Contact</th>
-            <th className="p-3">City</th>
-            <th className="p-3">Action</th>
-          </tr>
-        </thead>
+              Export selected only
+            </label>
 
-        <tbody>
-          {pageItems.map((c) => {
-            const selected = selectedRows.includes(c.id);
-            return (
-              <tr
-                key={c.id}
-                className={`border-b ${
-                  selected ? "bg-indigo-100/50" : "hover:bg-slate-50"
-                }`}
-              >
-                <td className="p-3">
+            <button
+              onClick={() =>
+                exportExcel({
+                  fileName: "UnitCompanyList",
+                  sheetName: "Companies",
+                  columns: exportColumns,
+                  rows: getRowsForExport(onlySelectedExport),
+                })
+              }
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 rounded-md text-xs font-bold hover:bg-emerald-50 hover:border-emerald-400 transition shadow-sm"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+            </button>
+
+            <button
+              onClick={() =>
+                exportPDF({
+                  fileName: "UnitCompanyList",
+                  title: "Unit Company List",
+                  columns: exportColumns,
+                  rows: getRowsForExport(onlySelectedExport),
+                })
+              }
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-rose-700 border border-rose-200 rounded-md text-xs font-bold hover:bg-rose-50 hover:border-rose-400 transition shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5" /> PDF
+            </button>
+
+            <button
+              onClick={() =>
+                printTable({
+                  title: "Unit Company List",
+                  columns: exportColumns,
+                  rows: getRowsForExport(onlySelectedExport),
+                })
+              }
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-md text-xs font-bold hover:bg-slate-50 hover:border-slate-400 transition shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" /> Print
+            </button>
+          </div>
+        </div>
+
+        {/* --- DATA TABLE --- */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-200 border-b border-slate-300 text-black uppercase text-[11px] font-semibold tracking-wider">
+                <th className="px-6 py-4 w-10 text-center">
                   <input
                     type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleRow(c.id)}
+                    checked={
+                      pageItems.length > 0 &&
+                      pageItems.every((c) => selectedRows.includes(c.id))
+                    }
+                    onChange={toggleAll}
                   />
-                </td>
-
-                <td className="p-3 font-medium">
-                  {c.unitName}
-                </td>
-
-                <td className="p-3">
-                  {c.gstin}
-                  <div className="text-xs text-slate-400">{c.pan}</div>
-                </td>
-
-                <td className="p-3">
-                  {c.phone}
-                  <div className="text-xs text-slate-400">{c.email}</div>
-                </td>
-
-                <td className="p-3">{c.city}</td>
-
-                <td className="p-3">
-                  <div className="flex gap-1 justify-center">
-                    <button
-                      onClick={() => handleView(c)}
-                      className="p-2 rounded-full hover:bg-slate-200"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={() => handleEdit(c)}
-                      className="p-2 rounded-full hover:bg-slate-200 text-sky-600"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="p-2 rounded-full hover:bg-slate-200 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
+                </th>
+                <th className="px-6 py-4 text-center w-20">Sr No</th>
+                <th className="px-6 py-4 text-center w-36">Actions</th>
+                <th className="px-6 py-4">Company Details</th>
+                <th className="px-6 py-4">Taxation</th>
+                <th className="px-6 py-4">Contact</th>
+                <th className="px-6 py-4">City</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {pageItems.length > 0 ? (
+                pageItems.map((c, index) => {
+                  const selected = selectedRows.includes(c.id);
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`group transition-colors border-b border-slate-300 ${
+                        selected ? "bg-indigo-100/60" : "hover:bg-teal-300/50"
+                      }`}
+                    >
+                      <td className="px-6 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleRow(c.id)}
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-center text-slate-900 font-medium">
+                        {(page - 1) * perPage + index + 1}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleView(c)} className="p-2 rounded-lg hover:bg-white hover:shadow-sm text-indigo-600 transition" title="View Details">
+                            <VisibilityIcon sx={{ fontSize: 18 }} />
+                          </button>
+                          <button onClick={() => handleEdit(c)} className="p-2 rounded-lg hover:bg-white hover:shadow-sm text-sky-600 transition" title="Edit">
+                            <ModeEditIcon sx={{ fontSize: 18 }} />
+                          </button>
+                          <button onClick={() => handleDelete(c.id)} className="p-2 rounded-lg hover:bg-white hover:shadow-sm text-rose-500 transition" title="Delete">
+                            <DeleteIcon sx={{ fontSize: 18 }} />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-slate-800 font-poppins">{c.unitName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {c.id}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-indigo-900 font-semibold font-poppins text-xs">{c.gstin}</span>
+                          <span className="text-slate-900 font-poppins text-[10px]">PAN: {c.pan}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-slate-700 font-medium">{c.phone}</div>
+                        <div className="text-xs text-slate-400 truncate max-w-[150px] font-poppins">{c.email}</div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-700 font-medium">{c.city}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="7" className="px-6 py-12 text-center text-slate-400 font-poppins">No records found matching your search.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* --- PAGINATION --- */}
+        <div className="px-6 py-4 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100">
+          <div className="text-xs text-slate-500">
+            Showing <span className="font-bold text-slate-700">{filtered.length === 0 ? 0 : (page - 1) * perPage + 1}</span> to <span className="font-bold text-slate-700">{Math.min(page * perPage, filtered.length)}</span> of <span className="font-bold text-slate-700">{filtered.length}</span> records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 border border-slate-200 rounded-md text-xs font-semibold bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Prev
+            </button>
+            <div className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-bold">
+              {page} / {totalPages}
+            </div>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 border border-slate-200 rounded-md text-xs font-semibold bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
